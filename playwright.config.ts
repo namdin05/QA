@@ -10,7 +10,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [['list'], ['html', { open: 'never' }], ['./reporters/dashboard-reporter.ts', { outputDir: 'docs' }]],
+  reporter: [['list'], ['html', { open: 'never' }], ['./reporters/dashboard-reporter.ts', { outputDir: 'docs', maxVideoRuns: 5 }]],
   use: {
     baseURL: FB_URL,
     storageState: fs.existsSync(STATE_FILE) ? STATE_FILE : undefined,
@@ -20,6 +20,7 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // Quay video mọi test làm bằng chứng vào game; thu nhỏ 2/3 cho nhẹ (~1MB/test)
+    video: { mode: 'on', size: { width: 960, height: 600 } },
   },
 });

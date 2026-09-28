@@ -21,16 +21,16 @@
   <section class="tiles" id="tiles"></section>
 
   <div class="toolbar" id="filters" role="group" aria-label="Lọc"></div>
-  <section class="card table-wrap">
+  <section class="card table-wrap report">
     <table>
       <thead><tr>
-        <th>Trạng thái</th><th>Entry point</th><th class="hide-sm">Source</th><th>Expected</th><th>Actual</th><th class="hide-sm">Thời gian</th><th>Ảnh</th>
+        <th>Trạng thái</th><th>Entry point</th><th class="hide-sm">Source</th><th>Expected</th><th>Actual</th><th>Vào game</th><th class="hide-sm">Thời gian</th><th>Bằng chứng</th>
       </tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </section>
 </div>
-<dialog id="lightbox"><img alt=""></dialog>
+<dialog id="lightbox"><div id="lightboxBody"></div></dialog>
 
 <script>
 // Dữ liệu được reporter nhúng vào lúc build — file này tự chứa, mở trực tiếp không cần server
@@ -44,6 +44,9 @@ const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'sho
 const sourceOf = (t) => t.source || (t.url ? new URL(t.url).searchParams.get('source') : '') || '';
 const STATUS_LABEL = { passed: '✓ Pass', failed: '✕ Fail', timedOut: '✕ Timeout', interrupted: '✕ Dừng', skipped: '– Bỏ qua' };
 const isFail = (s) => ['failed', 'timedOut', 'interrupted'].includes(s);
+// Video của các lần chạy cũ bị dọn để repo không phình -> hiện thông báo thay vì khung đen
+const videoTag = (src, extra = '') =>
+  `<video controls preload="metadata" ${extra} src="${esc(src)}" onerror="this.outerHTML='<div class=&quot;empty&quot;>Video không còn — chỉ giữ cho các lần chạy gần nhất</div>'"></video>`;
 const FILTERS = [['all', 'Tất cả'], ['fail', 'Chỉ fail'], ['UI', 'Qua UI'], ['URL', 'Qua URL']];
 let filter = 'all';
 
@@ -66,10 +69,11 @@ function renderHeader() {
 
 function renderRows() {
   const tests = RUN.tests.filter((t) => filter === 'all' || (filter === 'fail' ? isFail(t.status) : t.kind === filter));
-  if (!tests.length) { $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Không có test nào.</td></tr>'; return; }
+  if (!tests.length) { $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Không có test nào.</td></tr>'; return; }
   $('#rows').innerHTML = tests.map((t, i) => {
     const mismatch = t.actual && t.expected && t.actual !== t.expected;
-    const hasDetail = t.error || t.url;
+    const hasDetail = t.error || t.url || t.video || t.dashboardShot;
+    const playOk = t.play && !t.play.startsWith('skipped');
     return `<tr class="main">
       <td><span class="status ${t.status}">${STATUS_LABEL[t.status] ?? t.status}</span></td>
       <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
@@ -77,10 +81,20 @@ function renderRows() {
       <td class="hide-sm mono muted">${esc(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—'))}</td>
       <td class="mono">${esc(t.expected ?? '—')}</td>
       <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>
+      <td class="play-cell">${playOk ? `<span class="mono">${esc(t.play)}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}` : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`}</td>
       <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
-      <td>${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : '<span class="muted">—</span>'}</td>
+      <td><div class="proof">
+        ${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : ''}
+        ${t.video ? `<button class="chip play" data-video="${esc(t.video)}">▶ Video</button>` : ''}
+        ${!t.screenshot && !t.video ? '<span class="muted">—</span>' : ''}
+      </div></td>
     </tr>
-    ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="7">
+    ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="8">
+      ${t.dashboardShot || t.video ? `<div class="evidence">
+        ${t.dashboardShot ? `<figure><img class="thumb big" src="${t.dashboardShot}" alt="Màn hình chính của game"><figcaption>Game load xong</figcaption></figure>` : ''}
+        ${t.screenshot && t.dashboardShot ? `<figure><img class="thumb big" src="${t.screenshot}" alt="Sau khi bấm nút"><figcaption>Sau khi bấm nút</figcaption></figure>` : ''}
+        ${t.video ? `<figure>${videoTag(t.video)}<figcaption>Video toàn bộ test</figcaption></figure>` : ''}
+      </div>` : ''}
       ${t.url ? `<div class="mono muted" style="word-break:break-all;margin-bottom:6px">${esc(t.url)}</div>` : ''}
       ${t.error ? `<pre class="err">${esc(t.error)}</pre>` : ''}
     </td></tr>` : ''}`;
@@ -96,9 +110,13 @@ $('#filters').addEventListener('click', (e) => {
 $('#rows').addEventListener('click', (e) => {
   const tg = e.target.dataset?.toggle;
   if (tg !== undefined) { const d = $('#d' + tg); d.hidden = !d.hidden; e.target.textContent = d.hidden ? 'Chi tiết' : 'Ẩn'; }
-  if (e.target.classList.contains('thumb')) { $('#lightbox img').src = e.target.src; $('#lightbox').showModal(); }
+  if (e.target.classList.contains('thumb')) openLightbox(`<img src="${e.target.src}" alt="">`);
+  if (e.target.dataset?.video) openLightbox(videoTag(e.target.dataset.video, 'autoplay'));
 });
-$('#lightbox').addEventListener('click', () => $('#lightbox').close());
+function openLightbox(html) { $('#lightboxBody').innerHTML = html; $('#lightbox').showModal(); }
+// Bấm ra ngoài để đóng (bấm vào video thì không đóng, để còn tua)
+$('#lightbox').addEventListener('click', (e) => { if (e.target.tagName !== 'VIDEO') $('#lightbox').close(); });
+$('#lightbox').addEventListener('close', () => { $('#lightboxBody').innerHTML = ''; });
 renderHeader(); renderRows();
 </script>
 </body>

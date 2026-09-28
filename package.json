@@ -9,6 +9,7 @@
     "test:entry": "playwright test tests/game-entry.spec.ts",
     "codegen": "playwright codegen --load-storage=.auth/fb-state.json https://www.facebook.com",
     "discover": "tsx scripts/discover-entry-points.ts",
+    "game:buttons": "tsx scripts/game-buttons.ts",
     "report": "playwright show-report",
     "dashboard": "open docs/index.html",
     "typecheck": "tsc --noEmit"

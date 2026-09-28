@@ -2,17 +2,19 @@
  * Reporter xuất kết quả thành site tĩnh (mặc định ./docs) để đẩy lên GitHub Pages:
  *
  *   docs/index.html                  landing page: danh sách mọi lần chạy
- *   docs/reports/<runId>.html        report của 1 lần chạy — tự chứa (dữ liệu + ảnh nhúng sẵn)
+ *   docs/reports/<runId>.html        report của 1 lần chạy (dữ liệu + ảnh nhúng sẵn)
+ *   docs/reports/<runId>/<n>.webm    video từng test — chỉ giữ cho `maxVideoRuns` lần chạy gần nhất
  *   docs/reports/runs.json           manifest để build lại landing page
  *
- * GitHub Pages là public -> KHÔNG xuất trace/video (chứa cookie đăng nhập) và cắt token khỏi URL.
+ * GitHub Pages là public -> KHÔNG xuất trace (chứa cookie đăng nhập) và cắt token khỏi URL.
+ * Video chỉ là hình ảnh màn hình, không chứa cookie.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FullConfig, FullResult, Reporter, TestCase, TestResult } from '@playwright/test/reporter';
 import { env } from '../src/config';
 
-type Options = { outputDir?: string; maxRuns?: number };
+type Options = { outputDir?: string; maxRuns?: number; maxVideoRuns?: number };
 
 type TestRow = {
   kind: string;
@@ -21,11 +23,18 @@ type TestRow = {
   expected?: string;
   actual?: string;
   url?: string;
+  /** vd "SettingsButton → SettingsScreen", hoặc "skipped: ..." */
+  play?: string;
+  /** Thời gian từ lúc bắt đầu tới khi game vào màn hình chính */
+  readyMs?: number;
   status: TestResult['status'];
   durationMs: number;
   error?: string;
   /** data: URI */
   screenshot?: string;
+  dashboardShot?: string;
+  /** Đường dẫn tương đối so với file report */
+  video?: string;
 };
 
 type RunSummary = {
@@ -74,14 +83,21 @@ function renderTemplate(name: string, placeholder: string, data: unknown): strin
 export default class DashboardReporter implements Reporter {
   private readonly outputDir: string;
   private readonly maxRuns: number;
+  private readonly maxVideoRuns: number;
   private readonly startedAt = new Date();
   private readonly runId = this.startedAt.toISOString().replace(/[:.]/g, '-');
   private readonly rows = new Map<string, TestRow>();
+  private readonly indexes = new Map<string, number>();
   private config?: FullConfig;
 
   constructor(options: Options = {}) {
     this.outputDir = path.resolve(ROOT, options.outputDir ?? 'docs');
     this.maxRuns = options.maxRuns ?? 200;
+    this.maxVideoRuns = options.maxVideoRuns ?? 5;
+  }
+
+  private get videoDir() {
+    return path.join(this.outputDir, 'reports', this.runId);
   }
 
   onBegin(config: FullConfig) {
@@ -91,6 +107,7 @@ export default class DashboardReporter implements Reporter {
   onTestEnd(test: TestCase, result: TestResult) {
     const ann = (type: string) => test.annotations.findLast((a) => a.type === `ep.${type}`)?.description;
     const url = ann('url');
+    const readyMs = ann('ready_ms');
 
     // Map theo test.id: nếu có retry thì lần sau ghi đè lần trước
     this.rows.set(test.id, {
@@ -100,19 +117,36 @@ export default class DashboardReporter implements Reporter {
       expected: ann('expected'),
       actual: ann('actual') || undefined,
       url: url && sanitizeUrl(url),
+      play: ann('play'),
+      readyMs: readyMs ? Number(readyMs) : undefined,
       status: result.status,
       durationMs: result.duration,
       error: result.errors.length
         ? sanitizeText(stripAnsi(result.errors.map((e) => e.message ?? '').join('\n'))).slice(0, 2000)
         : undefined,
-      screenshot: this.screenshotDataUri(result),
+      // Ưu tiên ảnh game (attach trong test), fallback ảnh chụp lúc fail
+      screenshot: this.dataUri(result, 'game') ?? this.dataUri(result, 'screenshot'),
+      dashboardShot: this.dataUri(result, 'dashboard'),
+      video: this.saveVideo(result, this.fileIndex(test)),
     });
   }
 
-  /** Ưu tiên ảnh game (attach trong test), fallback ảnh chụp lúc fail */
-  private screenshotDataUri(result: TestResult): string | undefined {
-    const att =
-      result.attachments.find((a) => a.name === 'game') ?? result.attachments.find((a) => a.name === 'screenshot');
+  /** Số thứ tự ổn định cho từng test (retry vẫn giữ số cũ) — dùng đặt tên file video */
+  private fileIndex(test: TestCase): number {
+    if (!this.indexes.has(test.id)) this.indexes.set(test.id, this.indexes.size + 1);
+    return this.indexes.get(test.id)!;
+  }
+
+  private saveVideo(result: TestResult, index: number): string | undefined {
+    const att = result.attachments.find((a) => a.name === 'video' && a.path && fs.existsSync(a.path));
+    if (!att?.path) return undefined;
+    fs.mkdirSync(this.videoDir, { recursive: true });
+    fs.copyFileSync(att.path, path.join(this.videoDir, `${index}.webm`));
+    return `${this.runId}/${index}.webm`;
+  }
+
+  private dataUri(result: TestResult, name: string): string | undefined {
+    const att = result.attachments.find((a) => a.name === name);
     if (!att) return undefined;
     const body = att.body ?? (att.path && fs.existsSync(att.path) ? fs.readFileSync(att.path) : undefined);
     return body && `data:${att.contentType};base64,${body.toString('base64')}`;
@@ -147,11 +181,15 @@ export default class DashboardReporter implements Reporter {
     const reportFile = path.join(this.outputDir, summary.file);
     fs.writeFileSync(reportFile, renderTemplate('report.html', '/*__RUN__*/null', { ...summary, tests: rows }));
 
-    // Cập nhật manifest, xoá report cũ vượt quá maxRuns
+    // Cập nhật manifest, xoá report cũ vượt quá maxRuns; video chỉ giữ cho maxVideoRuns lần gần nhất
+    // (video ~1MB/test -> giữ hết sẽ làm repo GitHub phình rất nhanh)
     const manifestFile = path.join(reportsDir, 'runs.json');
     const runs: RunSummary[] = fs.existsSync(manifestFile) ? JSON.parse(fs.readFileSync(manifestFile, 'utf8')) : [];
     const kept = [summary, ...runs.filter((r) => r.id !== summary.id)];
     for (const old of kept.splice(this.maxRuns)) fs.rmSync(path.join(this.outputDir, old.file), { force: true });
+    for (const old of kept.slice(this.maxVideoRuns)) {
+      fs.rmSync(path.join(reportsDir, old.id), { recursive: true, force: true });
+    }
     fs.writeFileSync(manifestFile, JSON.stringify(kept, null, 2));
 
     fs.writeFileSync(path.join(this.outputDir, 'index.html'), renderTemplate('index.html', '/*__RUNS__*/[]', kept));

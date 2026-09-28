@@ -19,4 +19,10 @@ export const env = {
   gameId: process.env.FB_GAME_ID ?? '',
   // Chỉ cần cho các entry point qua tìm kiếm
   gameName: process.env.FB_GAME_NAME ?? '',
+  /** Scene Cocos khi game đã load xong và vào màn hình chính */
+  readyScene: process.env.FB_GAME_READY_SCENE ?? '',
+  /** Đường dẫn node nút sẽ bấm để chứng minh đã vào game (xem `npm run game:buttons`) */
+  checkButton: process.env.FB_GAME_CHECK_BUTTON ?? '',
+  /** Node phải hiện ra sau khi bấm (vd popup). Để trống = chờ scene đổi */
+  checkExpectNode: process.env.FB_GAME_CHECK_EXPECT_NODE ?? '',
 };
