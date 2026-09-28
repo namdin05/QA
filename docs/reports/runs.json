@@ -1,0 +1,22 @@
+[
+  {
+    "id": "2026-09-28T09-03-54-323Z",
+    "file": "reports/2026-09-28T09-03-54-323Z.html",
+    "startedAt": "2026-09-28T09:03:54.323Z",
+    "durationMs": 106362.816,
+    "status": "passed",
+    "counts": {
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0
+    },
+    "meta": {
+      "gameId": "1329094249218455",
+      "gameName": "Snake Escape Puzzle",
+      "account": "mk***@tfbnw.net",
+      "browser": "msedge",
+      "playwright": "1.63.0"
+    }
+  }
+]

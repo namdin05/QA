@@ -1,0 +1,23 @@
+{
+  "name": "fb-entry-point-test",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "login": "tsx scripts/login.ts",
+    "test": "playwright test",
+    "test:auth": "playwright test tests/auth.spec.ts",
+    "test:entry": "playwright test tests/game-entry.spec.ts",
+    "codegen": "playwright codegen --load-storage=.auth/fb-state.json https://www.facebook.com",
+    "discover": "tsx scripts/discover-entry-points.ts",
+    "report": "playwright show-report",
+    "dashboard": "open docs/index.html",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.2",
+    "dotenv": "^18.0.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

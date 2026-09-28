@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entry Point Reports</title>
+<style>
+/*__STYLE__*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">Entry Point Reports</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+  <section class="card history">
+    <div class="label">Lịch sử (cũ → mới) · xanh = tất cả pass, đỏ = có fail · bấm để mở report</div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="card table-wrap">
+    <table>
+      <thead><tr><th>Thời điểm chạy</th><th>Kết quả</th><th>Tỉ lệ pass</th><th class="hide-sm">Game</th><th class="hide-sm">Browser</th><th class="hide-sm">Thời gian</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+</div>
+
+<script>
+// Danh sách report được reporter nhúng vào lúc build, mới nhất trước
+const RUNS = /*__RUNS__*/[];
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${(ms / 1000).toFixed(1)}s`; };
+const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+const rateOf = (c) => (c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0);
+
+if (!RUNS.length) {
+  $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
+} else {
+  const last = RUNS[0];
+  const games = [...new Set(RUNS.map((r) => r.meta.gameName || r.meta.gameId))];
+  $('#meta').textContent = `${RUNS.length} report · ${games.join(', ')}`;
+  $('#tiles').innerHTML = [
+    [last.counts.failed ? 'fail' : 'pass', 'Lần chạy gần nhất', `${rateOf(last.counts)}%`],
+    ['', 'Chạy lúc', fmtTime(last.startedAt)],
+    ['', 'Số report', RUNS.length],
+    ['pass', 'Toàn bộ pass', `${RUNS.filter((r) => !r.counts.failed).length}/${RUNS.length}`],
+  ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+
+  $('#bars').innerHTML = [...RUNS].reverse().map((r) =>
+    `<a class="bar ${r.counts.failed ? '' : 'ok'}" href="${esc(r.file)}"
+      title="${fmtTime(r.startedAt)} — ${r.counts.passed}/${r.counts.total} pass"
+      aria-label="${fmtTime(r.startedAt)}: ${r.counts.passed} trên ${r.counts.total} pass"></a>`).join('');
+
+  $('#rows').innerHTML = RUNS.map((r) => {
+    const rate = rateOf(r.counts);
+    return `<tr class="main">
+      <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
+      <td><span class="status ${r.counts.failed ? 'failed' : 'passed'}">${r.counts.failed ? `✕ ${r.counts.failed} fail` : '✓ Pass'}</span></td>
+      <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
+      <td class="hide-sm">${esc(r.meta.gameName || r.meta.gameId)}</td>
+      <td class="hide-sm mono muted">${esc(r.meta.browser)}</td>
+      <td class="hide-sm muted">${fmtDur(r.durationMs)}</td>
+      <td><a href="${esc(r.file)}">Xem →</a></td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

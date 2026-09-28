@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entry Point Report</title>
+<style>
+/*__STYLE__*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="../index.html">← Tất cả report</a>
+  <header>
+    <div>
+      <h1 id="title">Entry Point Report</h1>
+      <div class="sub" id="meta"></div>
+    </div>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div class="toolbar" id="filters" role="group" aria-label="Lọc"></div>
+  <section class="card table-wrap">
+    <table>
+      <thead><tr>
+        <th>Trạng thái</th><th>Entry point</th><th class="hide-sm">Source</th><th>Expected</th><th>Actual</th><th class="hide-sm">Thời gian</th><th>Ảnh</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </section>
+</div>
+<dialog id="lightbox"><img alt=""></dialog>
+
+<script>
+// Dữ liệu được reporter nhúng vào lúc build — file này tự chứa, mở trực tiếp không cần server
+const RUN = /*__RUN__*/null;
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${(ms / 1000).toFixed(1)}s`; };
+const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
+// Test UI không set source trước — lấy source thật từ URL game để thấy test đã đi qua link nào
+const sourceOf = (t) => t.source || (t.url ? new URL(t.url).searchParams.get('source') : '') || '';
+const STATUS_LABEL = { passed: '✓ Pass', failed: '✕ Fail', timedOut: '✕ Timeout', interrupted: '✕ Dừng', skipped: '– Bỏ qua' };
+const isFail = (s) => ['failed', 'timedOut', 'interrupted'].includes(s);
+const FILTERS = [['all', 'Tất cả'], ['fail', 'Chỉ fail'], ['UI', 'Qua UI'], ['URL', 'Qua URL']];
+let filter = 'all';
+
+function renderHeader() {
+  const m = RUN.meta;
+  document.title = `${m.gameName || 'Entry Point'} · ${fmtTime(RUN.startedAt)}`;
+  $('#title').textContent = m.gameName ? `${m.gameName} · Entry Point Report` : 'Entry Point Report';
+  $('#meta').innerHTML = [
+    `Game <code>${esc(m.gameId)}</code>`, `Account <code>${esc(m.account)}</code>`,
+    `Browser <code>${esc(m.browser)}</code>`, `Chạy lúc ${fmtTime(RUN.startedAt)}`,
+  ].join(' · ');
+  const c = RUN.counts;
+  const rate = c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0;
+  $('#tiles').innerHTML = [
+    [c.failed ? 'fail' : 'pass', 'Tỉ lệ pass', `${rate}%`], ['pass', 'Pass', c.passed], [c.failed ? 'fail' : '', 'Fail', c.failed],
+    ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
+  ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
+  $('#filters').innerHTML = FILTERS.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${k === filter}">${l}</button>`).join('');
+}
+
+function renderRows() {
+  const tests = RUN.tests.filter((t) => filter === 'all' || (filter === 'fail' ? isFail(t.status) : t.kind === filter));
+  if (!tests.length) { $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Không có test nào.</td></tr>'; return; }
+  $('#rows').innerHTML = tests.map((t, i) => {
+    const mismatch = t.actual && t.expected && t.actual !== t.expected;
+    const hasDetail = t.error || t.url;
+    return `<tr class="main">
+      <td><span class="status ${t.status}">${STATUS_LABEL[t.status] ?? t.status}</span></td>
+      <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
+        ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}</td>
+      <td class="hide-sm mono muted">${esc(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—'))}</td>
+      <td class="mono">${esc(t.expected ?? '—')}</td>
+      <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>
+      <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
+      <td>${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : '<span class="muted">—</span>'}</td>
+    </tr>
+    ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="7">
+      ${t.url ? `<div class="mono muted" style="word-break:break-all;margin-bottom:6px">${esc(t.url)}</div>` : ''}
+      ${t.error ? `<pre class="err">${esc(t.error)}</pre>` : ''}
+    </td></tr>` : ''}`;
+  }).join('');
+}
+
+$('#filters').addEventListener('click', (e) => {
+  const f = e.target.dataset?.f; if (!f) return;
+  filter = f;
+  document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.f === f));
+  renderRows();
+});
+$('#rows').addEventListener('click', (e) => {
+  const tg = e.target.dataset?.toggle;
+  if (tg !== undefined) { const d = $('#d' + tg); d.hidden = !d.hidden; e.target.textContent = d.hidden ? 'Chi tiết' : 'Ẩn'; }
+  if (e.target.classList.contains('thumb')) { $('#lightbox img').src = e.target.src; $('#lightbox').showModal(); }
+});
+$('#lightbox').addEventListener('click', () => $('#lightbox').close());
+renderHeader(); renderRows();
+</script>
+</body>
+</html>
