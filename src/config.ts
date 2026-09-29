@@ -14,7 +14,7 @@ export const env = {
 };
 
 /** snake-escape -> SNAKE_ESCAPE */
-const envSuffix = (slug: string) => slug.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+export const envSuffix = (slug: string) => slug.toUpperCase().replace(/[^A-Z0-9]+/g, '_');
 
 /** Tài khoản test của từng game: FB_EMAIL_<SLUG> / FB_PASSWORD_<SLUG> trong .env */
 export function gameAccount(slug: string) {

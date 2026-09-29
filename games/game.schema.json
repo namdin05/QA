@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Cấu hình game",
+  "description": "games/<slug>/game.json — tên thư mục là slug (vd snake-escape). Tài khoản test đặt trong .env: FB_EMAIL_<SLUG> / FB_PASSWORD_<SLUG>.",
+  "type": "object",
+  "required": ["id", "name"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[0-9]+$", "description": "Facebook App ID của game (số trong URL facebook.com/gaming/play/<id>)" },
+    "name": { "type": "string", "description": "Tên hiển thị trên Facebook — dùng cho entry point qua ô tìm kiếm" },
+    "cocos": {
+      "type": "object",
+      "description": "Chỉ cho game Cocos Creator: dùng để chứng minh đã vào game (chạy `npm run game:buttons -- <slug>` để tìm giá trị)",
+      "required": ["readyScene", "checkButton"],
+      "additionalProperties": false,
+      "properties": {
+        "readyScene": { "type": "string", "description": "Scene khi game đã load xong, vào màn hình chính" },
+        "checkButton": { "type": "string", "description": "Đường dẫn node nút sẽ bấm (nên chọn nút không ảnh hưởng tiến trình, vd Settings)" },
+        "checkExpectNode": { "type": "string", "description": "Node phải hiện ra sau khi bấm (vd popup). Bỏ trống = chờ scene đổi" },
+        "settleMs": { "type": "number", "minimum": 0, "description": "Chờ thêm (ms) sau khi vào readyScene cho animation mở màn chạy xong" }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tên thiết bị trong `devices` của Playwright cho feature responsive. Bỏ trống = dùng games/defaults.json"
+    }
+  }
+}

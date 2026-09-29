@@ -1,0 +1,11 @@
+{
+  "$schema": "../game.schema.json",
+  "id": "1329094249218455",
+  "name": "Snake Escape Puzzle",
+  "cocos": {
+    "readyScene": "DashboardScene",
+    "checkButton": "Canvas/UI/Header/DashboardSceneHeader/ButtonsContainer/SettingsButton",
+    "checkExpectNode": "Canvas/Screens/SettingsScreen",
+    "settleMs": 2500
+  }
+}

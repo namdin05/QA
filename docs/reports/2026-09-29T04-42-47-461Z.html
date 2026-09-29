@@ -139,12 +139,19 @@
   .checks li.bad .check-detail { background: var(--fail-bg); }
   .device.has-warn { border-color: var(--warn); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Chọn game trên landing page */
+  .game-picker { margin-bottom: 16px; }
+  .game-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .game-chip[aria-pressed="true"] .muted { color: rgba(255,255,255,.8); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pass); display: inline-block; }
+  .dot.failed { background: var(--fail); } .dot.warned { background: var(--warn); }
+  .bar.warn { background: var(--warn); }
 
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a class="back" href="../index.html">← Tất cả report</a>
+  <a class="back" id="back" href="../index.html">← Tất cả report</a>
   <header>
     <div>
       <h1 id="title">Test Report</h1>
@@ -152,6 +159,7 @@
     </div>
   </header>
 
+  <nav class="toolbar game-picker" id="gamePicker" aria-label="Chọn game"></nav>
   <section class="tiles" id="tiles"></section>
   <nav class="toolbar" id="featureNav" aria-label="Feature"></nav>
   <div id="sections"></div>
@@ -183,10 +191,41 @@ const testBadge = (t) => t.status === 'passed' && warnCount(t)
 const videoTag = (src, extra = '') =>
   `<video controls preload="metadata" ${extra} src="${esc(src)}" onerror="this.outerHTML='<div class=&quot;empty&quot;>Video không còn — chỉ giữ cho các lần chạy gần nhất</div>'"></video>`;
 
-// Hỗ trợ report cũ (trước khi tách feature) không có trường game/feature
-const tests = RUN.tests.map((t) => ({ ...t, feature: t.feature ?? (t.kind === 'Auth' ? 'auth' : 'entry-point'), checks: t.checks ?? [] }));
-const games = RUN.games ?? [{ slug: '', id: RUN.meta.gameId, name: RUN.meta.gameName, account: RUN.meta.account }];
-const features = [...new Set(tests.map((t) => t.feature))];
+// Hỗ trợ report cũ (trước khi tách feature / nhiều game) không có trường game/feature
+const allGames = RUN.games ?? [{ slug: '', id: RUN.meta.gameId, name: RUN.meta.gameName, account: RUN.meta.account }];
+const allTests = RUN.tests.map((t) => ({
+  ...t, game: t.game ?? allGames[0].slug, feature: t.feature ?? (t.kind === 'Auth' ? 'auth' : 'entry-point'), checks: t.checks ?? [],
+}));
+
+// Lọc theo game: link từ landing page mang #game=<slug>
+let selectedGame = new URLSearchParams(location.hash.slice(1)).get('game') ?? '';
+if (!allGames.some((g) => g.slug === selectedGame)) selectedGame = '';
+let games, tests, features;
+function applyGameFilter() {
+  games = selectedGame ? allGames.filter((g) => g.slug === selectedGame) : allGames;
+  tests = selectedGame ? allTests.filter((t) => t.game === selectedGame) : allTests;
+  features = [...new Set(tests.map((t) => t.feature))];
+}
+applyGameFilter();
+
+/** Đếm lại theo danh sách test đang hiển thị (đúng cả khi đang lọc 1 game) */
+function countTests(list) {
+  const n = (ss) => list.filter((t) => ss.includes(t.status)).length;
+  return { total: list.length, passed: n(['passed']), failed: n(['failed', 'timedOut', 'interrupted']), skipped: n(['skipped']),
+    warned: list.filter((t) => t.status === 'passed' && warnCount(t)).length };
+}
+
+function renderGamePicker() {
+  if (allGames.length < 2) { $('#gamePicker').innerHTML = ''; return; }
+  const chip = (slug, label, list) => {
+    const c = countTests(list);
+    return `<button class="chip game-chip" data-game="${esc(slug)}" aria-pressed="${slug === selectedGame}">
+      <span class="dot ${c.failed ? 'failed' : c.warned ? 'warned' : 'passed'}" aria-hidden="true"></span>${esc(label)}
+      <span class="muted">${c.passed}/${c.total}</span></button>`;
+  };
+  $('#gamePicker').innerHTML = [chip('', 'Tất cả game', allTests),
+    ...allGames.map((g) => chip(g.slug, g.name, allTests.filter((t) => t.game === g.slug)))].join('');
+}
 const filters = {}; // feature -> filter
 let rowSeq = 0;
 
@@ -198,19 +237,21 @@ function renderHeader() {
     ...games.map((g) => `Game <code>${esc(g.id)}</code> · Account <code>${esc(g.account)}</code>`),
     `Browser <code>${esc(RUN.meta.browser)}</code>`, `Chạy lúc ${fmtTime(RUN.startedAt)}`,
   ].join(' · ');
-  const c = RUN.counts;
+  const c = countTests(tests);
   const rate = c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0;
-  const warned = c.warned ?? tests.filter((t) => t.status === 'passed' && warnCount(t)).length;
+  const warned = c.warned;
+  // Lọc 1 game: cộng thời gian các test của game đó; không lọc: tổng thời gian thật của lần chạy
+  const duration = selectedGame ? tests.reduce((s, t) => s + t.durationMs, 0) : RUN.durationMs;
   $('#tiles').innerHTML = [
     [c.failed ? 'fail' : 'pass', 'Tỉ lệ pass', `${rate}%`], ['pass', 'Pass', c.passed], [c.failed ? 'fail' : '', 'Fail', c.failed],
-    [warned ? 'warn' : '', 'Cảnh báo', warned], ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
+    [warned ? 'warn' : '', 'Cảnh báo', warned], ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(duration)],
   ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
   $('#featureNav').innerHTML = features.length > 1 ? features.map((f) => {
     const ts = tests.filter((t) => t.feature === f);
     const failed = ts.filter((t) => isFail(t.status)).length;
     const warns = ts.filter((t) => t.status === 'passed' && warnCount(t)).length;
     const badge = failed ? `<span class="mismatch">${failed} fail</span>` : warns ? `<span class="status warned">⚠ ${warns}</span>` : `<span class="muted">${ts.length}</span>`;
-    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} ${badge}</a>`;
+    return `<button class="chip" data-jump="f-${esc(f)}">${esc(featureLabel(f))} ${badge}</button>`;
   }).join('') : '';
 }
 
@@ -332,6 +373,15 @@ function renderSections() {
 }
 
 document.addEventListener('click', (e) => {
+  const gameChip = e.target.closest?.('[data-game]');
+  if (gameChip) {
+    selectedGame = gameChip.dataset.game;
+    history.replaceState(null, '', selectedGame ? `#game=${encodeURIComponent(selectedGame)}` : location.pathname);
+    applyGameFilter(); renderGamePicker(); renderHeader(); renderSections();
+    return;
+  }
+  const jump = e.target.closest?.('[data-jump]');
+  if (jump) { document.getElementById(jump.dataset.jump)?.scrollIntoView({ behavior: 'smooth' }); return; }
   const el = e.target;
   if (el.dataset?.f && el.dataset.feature) { filters[el.dataset.feature] = el.dataset.f; renderSections(); return; }
   const tg = el.dataset?.toggle;
@@ -343,7 +393,9 @@ function openLightbox(html) { $('#lightboxBody').innerHTML = html; $('#lightbox'
 // Bấm ra ngoài để đóng (bấm vào video thì không đóng, để còn tua)
 $('#lightbox').addEventListener('click', (e) => { if (e.target.tagName !== 'VIDEO') $('#lightbox').close(); });
 $('#lightbox').addEventListener('close', () => { $('#lightboxBody').innerHTML = ''; });
-renderHeader(); renderSections();
+// Quay lại landing page giữ game đang chọn
+$('#back').addEventListener('click', (e) => { if (selectedGame) { e.preventDefault(); location.href = `../index.html#game=${encodeURIComponent(selectedGame)}`; } });
+renderGamePicker(); renderHeader(); renderSections();
 </script>
 </body>
 </html>

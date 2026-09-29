@@ -50,6 +50,8 @@ type TestRow = {
   video?: string;
 };
 
+type Counts = { total: number; passed: number; failed: number; skipped: number; warned: number };
+
 type RunSummary = {
   id: string;
   /** Đường dẫn report, tương đối so với index.html */
@@ -58,7 +60,9 @@ type RunSummary = {
   durationMs: number;
   status: FullResult['status'];
   /** warned = số test pass nhưng có ít nhất 1 kiểm tra ⚠ */
-  counts: { total: number; passed: number; failed: number; skipped: number; warned: number };
+  counts: Counts;
+  /** Số liệu riêng từng game (slug -> counts) — landing page lọc theo game */
+  perGame: Record<string, Counts>;
   features: string[];
   games: { slug: string; id: string; name: string; account: string }[];
   meta: { browser: string; playwright: string };
@@ -88,7 +92,7 @@ const sanitizeText = (text: string) => text.replace(/https:\/\/[^\s"'`]*facebook
 /** Nhúng JSON vào <script> an toàn (không để chuỗi `</script>` trong dữ liệu đóng thẻ sớm) */
 const toScriptJson = (data: unknown) => JSON.stringify(data).replace(/</g, '\\u003c');
 
-function renderTemplate(name: string, placeholder: string, data: unknown): string {
+export function renderTemplate(name: string, placeholder: string, data: unknown): string {
   const css = fs.readFileSync(path.join(TEMPLATE_DIR, 'style.css'), 'utf8');
   return fs
     .readFileSync(path.join(TEMPLATE_DIR, name), 'utf8')
@@ -101,6 +105,25 @@ function featureOf(test: TestCase): string {
   const rel = path.relative(ROOT, test.location.file).split(path.sep);
   const i = rel.lastIndexOf('features');
   return i >= 0 && rel[i + 1] ? rel[i + 1] : 'other';
+}
+
+function countRows(rows: TestRow[]): Counts {
+  const count = (s: TestResult['status'][]) => rows.filter((r) => s.includes(r.status)).length;
+  return {
+    total: rows.length,
+    passed: count(['passed']),
+    failed: count(['failed', 'timedOut', 'interrupted']),
+    skipped: count(['skipped']),
+    warned: rows.filter((r) => r.status === 'passed' && r.checks.some((c) => c.status === 'warn')).length,
+  };
+}
+
+/** Landing page: danh sách lần chạy + danh sách game đang cấu hình (cho bộ chọn game) */
+export function writeLanding(outputDir: string, runs: unknown[]) {
+  const games = GAMES.map(({ slug, id, name }) => ({ slug, id, name }));
+  fs.writeFileSync(path.join(outputDir, 'index.html'), renderTemplate('index.html', '/*__DATA__*/null', { runs, games }));
+  // Tắt Jekyll của GitHub Pages — không cần build, phục vụ file nguyên trạng
+  fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
 }
 
 export default class DashboardReporter implements Reporter {
@@ -189,7 +212,6 @@ export default class DashboardReporter implements Reporter {
     const rows = [...this.rows.values()];
     // `--list`, hoặc filter không khớp test nào -> không tạo report rỗng
     if (!rows.length) return;
-    const count = (s: TestResult['status'][]) => rows.filter((r) => s.includes(r.status)).length;
     const slugs = [...new Set(rows.map((r) => r.game))];
     const summary: RunSummary = {
       id: this.runId,
@@ -197,13 +219,8 @@ export default class DashboardReporter implements Reporter {
       startedAt: this.startedAt.toISOString(),
       durationMs: result.duration,
       status: result.status,
-      counts: {
-        total: rows.length,
-        passed: count(['passed']),
-        failed: count(['failed', 'timedOut', 'interrupted']),
-        skipped: count(['skipped']),
-        warned: rows.filter((r) => r.status === 'passed' && r.checks.some((c) => c.status === 'warn')).length,
-      },
+      counts: countRows(rows),
+      perGame: Object.fromEntries(slugs.map((slug) => [slug, countRows(rows.filter((r) => r.game === slug))])),
       features: [...new Set(rows.map((r) => r.feature))],
       games: slugs.map((slug) => {
         const game = GAMES.find((g) => g.slug === slug);
@@ -231,9 +248,7 @@ export default class DashboardReporter implements Reporter {
     }
     fs.writeFileSync(manifestFile, JSON.stringify(kept, null, 2));
 
-    fs.writeFileSync(path.join(this.outputDir, 'index.html'), renderTemplate('index.html', '/*__RUNS__*/[]', kept));
-    // Tắt Jekyll của GitHub Pages — không cần build, phục vụ file nguyên trạng
-    fs.writeFileSync(path.join(this.outputDir, '.nojekyll'), '');
+    writeLanding(this.outputDir, kept);
 
     console.log(`\n📊 Report: ${path.relative(process.cwd(), reportFile)}`);
     console.log(`   Landing: ${path.relative(process.cwd(), path.join(this.outputDir, 'index.html'))}  (npm run dashboard để mở)`);

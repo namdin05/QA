@@ -12,14 +12,16 @@
 <div class="wrap">
   <header>
     <div>
-      <h1 id="title">Entry Point Reports</h1>
+      <h1 id="title">Test Reports</h1>
       <div class="sub" id="meta"></div>
     </div>
   </header>
 
+  <nav class="toolbar game-picker" id="gamePicker" aria-label="Chọn game"></nav>
+
   <section class="tiles" id="tiles"></section>
   <section class="card history">
-    <div class="label">Lịch sử (cũ → mới) · xanh = tất cả pass, đỏ = có fail · bấm để mở report</div>
+    <div class="label">Lịch sử (cũ → mới) · xanh = tất cả pass, vàng = có cảnh báo, đỏ = có fail · bấm để mở report</div>
     <div class="bars" id="bars"></div>
   </section>
 
@@ -32,8 +34,9 @@
 </div>
 
 <script>
-// Danh sách report được reporter nhúng vào lúc build, mới nhất trước
-const RUNS = /*__RUNS__*/[];
+// Reporter nhúng vào lúc build: danh sách lần chạy (mới nhất trước) + danh sách game đang cấu hình
+const DATA = /*__DATA__*/null;
+const RUNS = DATA?.runs ?? [];
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -41,43 +44,114 @@ const fmtDur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Ma
 const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 const rateOf = (c) => (c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0);
 const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
-// Report cũ (trước khi tách feature) chỉ có meta.gameName và luôn là entry point
-const gamesOf = (r) => r.games?.map((g) => g.name) ?? [r.meta.gameName || r.meta.gameId];
 const featuresOf = (r) => (r.features ?? ['auth', 'entry-point']).map((f) => FEATURE_LABEL[f] ?? f);
 
-if (!RUNS.length) {
-  $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
-} else {
-  const last = RUNS[0];
-  const games = [...new Set(RUNS.flatMap(gamesOf))];
-  $('#meta').textContent = `${RUNS.length} report · ${games.join(', ')}`;
+// Danh sách game: game đang cấu hình + game xuất hiện trong lịch sử (kể cả game đã gỡ khỏi cấu hình)
+const GAMES = new Map((DATA?.games ?? []).map((g) => [g.slug, g]));
+const byName = new Map([...GAMES.values()].map((g) => [g.name, g.slug]));
+/** Game của 1 lần chạy. Report cũ (trước khi hỗ trợ nhiều game) chỉ có meta.gameName */
+const gamesOf = (r) => r.games ?? [{ slug: byName.get(r.meta.gameName) ?? r.meta.gameId, id: r.meta.gameId, name: r.meta.gameName, account: r.meta.account }];
+for (const r of RUNS) for (const g of gamesOf(r)) if (!GAMES.has(g.slug)) GAMES.set(g.slug, g);
+
+/** Số liệu của 1 game trong 1 lần chạy (null nếu lần chạy đó không có game này) */
+function countsOf(r, slug) {
+  if (!slug) return r.counts;
+  if (r.perGame) return r.perGame[slug] ?? null;
+  const gs = gamesOf(r);
+  return gs.length === 1 && gs[0].slug === slug ? r.counts : null;
+}
+const statusOf = (c) => (c.failed ? 'failed' : c.warned ? 'warned' : 'passed');
+const statusText = (c) => (c.failed ? `✕ ${c.failed} fail` : c.warned ? `⚠ Pass · ${c.warned} cảnh báo` : '✓ Pass');
+
+// Game đang chọn: giữ trên URL (#game=<slug>) để gửi link, nhớ lựa chọn gần nhất trong trình duyệt
+function initialGame() {
+  const fromHash = new URLSearchParams(location.hash.slice(1)).get('game');
+  if (fromHash !== null) return GAMES.has(fromHash) ? fromHash : '';
+  try { const saved = localStorage.getItem('game'); if (saved && GAMES.has(saved)) return saved; } catch {}
+  return '';
+}
+let selected = initialGame();
+
+function select(slug) {
+  selected = slug;
+  history.replaceState(null, '', slug ? `#game=${encodeURIComponent(slug)}` : location.pathname);
+  try { localStorage.setItem('game', slug); } catch {}
+  render();
+}
+
+function renderPicker() {
+  const chip = (slug, label, runs) => {
+    const last = runs[0] && countsOf(runs[0], slug);
+    return `<button class="chip game-chip" data-game="${esc(slug)}" aria-pressed="${slug === selected}">
+      ${last ? `<span class="dot ${statusOf(last)}" aria-hidden="true"></span>` : ''}${esc(label)}
+      <span class="muted">${runs.length}</span></button>`;
+  };
+  $('#gamePicker').innerHTML = GAMES.size > 1 || !RUNS.length ? [
+    chip('', 'Tất cả game', RUNS),
+    ...[...GAMES.values()].map((g) => chip(g.slug, g.name, RUNS.filter((r) => countsOf(r, g.slug)))),
+  ].join('') : '';
+}
+
+function render() {
+  renderPicker();
+  const game = selected ? GAMES.get(selected) : null;
+  const runs = RUNS.filter((r) => countsOf(r, selected));
+  const colspan = 8;
+  $('#title').textContent = game ? `${game.name} · Test Reports` : 'Test Reports';
+  document.title = $('#title').textContent;
+
+  if (!runs.length) {
+    $('#meta').textContent = game ? `App ID ${game.id}` : '';
+    $('#tiles').innerHTML = '';
+    $('#bars').innerHTML = '';
+    $('#rows').innerHTML = `<tr><td colspan="${colspan}" class="empty">${game
+      ? `Chưa có lần chạy nào cho ${esc(game.name)}. Chạy <code>npx playwright test --project=${esc(game.slug)}</code> để tạo.`
+      : 'Chưa có report nào. Chạy <code>npm test</code> để tạo.'}</td></tr>`;
+    return;
+  }
+
+  const account = game && gamesOf(runs[0]).find((g) => g.slug === game.slug)?.account;
+  $('#meta').innerHTML = game
+    ? `App ID <code>${esc(game.id)}</code>${account ? ` · Account <code>${esc(account)}</code>` : ''} · ${runs.length} lần chạy`
+    : `${runs.length} lần chạy · ${GAMES.size} game`;
+
+  const last = countsOf(runs[0], selected);
   $('#tiles').innerHTML = [
-    [last.counts.failed ? 'fail' : 'pass', 'Lần chạy gần nhất', `${rateOf(last.counts)}%`],
-    ['', 'Chạy lúc', fmtTime(last.startedAt)],
-    ['', 'Số report', RUNS.length],
-    ['pass', 'Toàn bộ pass', `${RUNS.filter((r) => !r.counts.failed).length}/${RUNS.length}`],
+    [last.failed ? 'fail' : last.warned ? 'warn' : 'pass', 'Lần chạy gần nhất', `${rateOf(last)}%`],
+    ['', 'Chạy lúc', fmtTime(runs[0].startedAt)],
+    ['', 'Số lần chạy', runs.length],
+    ['pass', 'Toàn bộ pass', `${runs.filter((r) => !countsOf(r, selected).failed).length}/${runs.length}`],
   ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
 
-  $('#bars').innerHTML = [...RUNS].reverse().map((r) =>
-    `<a class="bar ${r.counts.failed ? '' : 'ok'}" href="${esc(r.file)}"
-      title="${fmtTime(r.startedAt)} — ${r.counts.passed}/${r.counts.total} pass"
-      aria-label="${fmtTime(r.startedAt)}: ${r.counts.passed} trên ${r.counts.total} pass"></a>`).join('');
+  // Link sang report kèm game đang chọn để report lọc sẵn
+  const link = (r) => `${esc(r.file)}${selected ? `#game=${encodeURIComponent(selected)}` : ''}`;
+  $('#bars').innerHTML = [...runs].reverse().map((r) => {
+    const c = countsOf(r, selected);
+    return `<a class="bar ${c.failed ? '' : c.warned ? 'warn' : 'ok'}" href="${link(r)}"
+      title="${fmtTime(r.startedAt)} — ${c.passed}/${c.total} pass${c.warned ? `, ${c.warned} cảnh báo` : ''}"
+      aria-label="${fmtTime(r.startedAt)}: ${c.passed} trên ${c.total} pass"></a>`;
+  }).join('');
 
-  $('#rows').innerHTML = RUNS.map((r) => {
-    const rate = rateOf(r.counts);
+  $('#rows').innerHTML = runs.map((r) => {
+    const c = countsOf(r, selected);
     return `<tr class="main">
-      <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
-      <td><span class="status ${r.counts.failed ? 'failed' : r.counts.warned ? 'warned' : 'passed'}">${
-        r.counts.failed ? `✕ ${r.counts.failed} fail` : r.counts.warned ? `⚠ Pass · ${r.counts.warned} cảnh báo` : '✓ Pass'}</span></td>
-      <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
-      <td class="hide-sm">${esc(gamesOf(r).join(', '))}</td>
+      <td><a href="${link(r)}">${fmtTime(r.startedAt)}</a></td>
+      <td><span class="status ${statusOf(c)}">${statusText(c)}</span></td>
+      <td><span class="rate ${c.failed ? 'bad' : 'ok'}">${rateOf(c)}%</span> <span class="muted">(${c.passed}/${c.total})</span></td>
+      <td class="hide-sm">${esc(gamesOf(r).map((g) => g.name).join(', '))}</td>
       <td class="hide-sm">${featuresOf(r).map((f) => `<span class="kind">${esc(f)}</span>`).join(' ')}</td>
       <td class="hide-sm mono muted">${esc(r.meta.browser)}</td>
       <td class="hide-sm muted">${fmtDur(r.durationMs)}</td>
-      <td><a href="${esc(r.file)}">Xem →</a></td>
+      <td><a href="${link(r)}">Xem →</a></td>
     </tr>`;
   }).join('');
 }
+
+$('#gamePicker').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-game]');
+  if (chip) select(chip.dataset.game);
+});
+render();
 </script>
 </body>
 </html>

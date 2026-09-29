@@ -13,7 +13,10 @@
     "report": "playwright show-report",
     "dashboard": "open docs/index.html",
     "typecheck": "tsc --noEmit",
-    "test:responsive": "playwright test features/responsive"
+    "test:responsive": "playwright test features/responsive",
+    "game:new": "tsx scripts/new-game.ts",
+    "game:open": "tsx scripts/open-game.ts",
+    "report:rebuild": "tsx scripts/rebuild-reports.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

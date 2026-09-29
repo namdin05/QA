@@ -1,0 +1,13 @@
+{
+  "$comment": "Giá trị mặc định cho mọi game — game.json nào không khai báo thì dùng giá trị ở đây. Không dùng 'iPhone SE' (đời 1, iOS 10): Facebook chặn chơi game trên iOS cũ.",
+  "devices": [
+    "iPhone SE (3rd gen)",
+    "iPhone 12",
+    "iPhone 15 Pro Max",
+    "Pixel 7",
+    "Galaxy S9+",
+    "Galaxy Tab S4",
+    "iPad Mini",
+    "iPad Pro 11"
+  ]
+}

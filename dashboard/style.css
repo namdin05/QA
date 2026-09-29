@@ -132,3 +132,10 @@
   .checks li.bad .check-detail { background: var(--fail-bg); }
   .device.has-warn { border-color: var(--warn); }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Chọn game trên landing page */
+  .game-picker { margin-bottom: 16px; }
+  .game-chip { display: inline-flex; align-items: center; gap: 6px; }
+  .game-chip[aria-pressed="true"] .muted { color: rgba(255,255,255,.8); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pass); display: inline-block; }
+  .dot.failed { background: var(--fail); } .dot.warned { background: var(--warn); }
+  .bar.warn { background: var(--warn); }

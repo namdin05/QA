@@ -1,0 +1,9 @@
+{
+  "$schema": "../game.schema.json",
+  "id": "2148819552196072",
+  "name": "Goods Tidy Puzzle",
+  "cocos": {
+    "readyScene": "GameScene",
+    "checkButton": "Canvas/GameScreen/Header/ButtonBlock/SettingsButton/SettingButtonGP"
+  }
+}

@@ -6,11 +6,14 @@ Playwright + TypeScript, chạy trên Edge thật. Mặc định chạy ẩn (he
 ## Cấu trúc
 
 ```
-games/                     # cấu hình từng game — mỗi game là 1 project Playwright
-  index.ts                 #   danh sách game
+games/                     # dữ liệu từng game — tự phát hiện, mỗi game là 1 project Playwright
+  defaults.json            #   giá trị mặc định (danh sách thiết bị responsive)
+  game.schema.json         #   schema để VS Code gợi ý/kiểm tra game.json
   snake-escape/
-    config.ts              #   app id, tên, scene/nút Cocos, danh sách thiết bị
+    game.json              #   app id, tên, scene/nút Cocos, (tuỳ chọn) danh sách thiết bị
     features/              #   test riêng của game này (nếu có)
+  goods-tidy/
+    game.json
 features/                  # test dùng chung, chạy cho mọi game
   auth/                    #   session đăng nhập còn hiệu lực
   entry-point/             #   vào game từ nhiều entry point (UI + URL), có video
@@ -18,27 +21,38 @@ features/                  # test dùng chung, chạy cho mọi game
 src/                       # helper: fb (login), game (FBInstant, iframe), cocos (click trong canvas), report
 reporters/                 # xuất report tĩnh ra docs/ cho GitHub Pages
 dashboard/                 # template HTML/CSS của report
-scripts/                   # login, discover entry point, liệt kê nút trong game
+scripts/                   # tạo game, login, mở game bằng tay, discover entry point, liệt kê nút
 ```
+
+Tài khoản test mỗi game nằm trong `.env` (không commit): `FB_EMAIL_<SLUG>` / `FB_PASSWORD_<SLUG>`,
+SLUG = tên thư mục viết hoa, `-` thành `_` (vd `goods-tidy` → `FB_EMAIL_GOODS_TIDY`).
 
 ## Chạy
 
 ```bash
-npm run login -- snake-escape         # đăng nhập 1 lần, lưu session vào .auth/snake-escape/
-npm test                              # mọi feature, mọi game
-npm run test:entry                    # chỉ entry point
-npm run test:responsive               # chỉ responsive
-npx playwright test --project=snake-escape features/responsive   # 1 game, 1 feature
-npm run dashboard                     # mở report (docs/index.html)
+npm test                                           # mọi feature, mọi game (chạy ẩn)
+npx playwright test --project=goods-tidy           # 1 game
+npx playwright test --project=goods-tidy features/responsive   # 1 game, 1 feature
+npm run test:entry / test:responsive / test:auth   # 1 feature, mọi game
+npm run dashboard                                  # mở report (docs/index.html)
+npm run report:rebuild                             # dựng lại report sau khi sửa template giao diện
 ```
 
-## Thêm game mới
+## Thêm game mới (không cần sửa code)
 
-1. Copy `games/snake-escape/config.ts` sang `games/<slug>/config.ts`, sửa `id`, `name`, `devices`.
-2. Thêm vào mảng `GAMES` trong `games/index.ts`.
-3. Thêm `FB_EMAIL_<SLUG>` / `FB_PASSWORD_<SLUG>` vào `.env` (SLUG viết hoa, `-` thành `_`), rồi `npm run login -- <slug>`.
-4. Game Cocos Creator: `npm run game:buttons -- <slug>` để xem tên scene và đường dẫn các nút, điền vào `cocos`.
-5. `npm run discover -- <slug>` để dò các `source` entry point Facebook đang dùng.
+```bash
+npm run game:new -- <slug> <app-id> "<Tên game>"   # tạo games/<slug>/game.json + dòng tài khoản trong .env
+# điền FB_EMAIL_<SLUG> / FB_PASSWORD_<SLUG> vào .env
+npm run login -- <slug>                            # đăng nhập 1 lần (có cửa sổ, tự điền form)
+npm run game:buttons -- <slug>                     # game Cocos: xem scene + đường dẫn nút -> điền "cocos" trong game.json
+npm run discover -- <slug>                         # (tuỳ chọn) dò các `source` entry point
+npx playwright test --project=<slug>
+```
+
+- **App ID** là số trong URL `facebook.com/gaming/play/<app-id>` (thường 15–16 chữ số) — không phải ID Fanpage của game.
+  Mở Gaming hub bằng account của game để thấy đúng ID.
+- **Account mới đang ở tutorial**: game có thể ẩn nút Settings cho tới khi chơi xong tutorial.
+  Chạy `npm run game:open -- <slug>`, chơi qua tutorial trên cửa sổ; script báo khi nút kiểm tra đã hiện.
 
 ## Thêm feature mới
 
