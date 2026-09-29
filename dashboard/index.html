@@ -25,7 +25,7 @@
 
   <section class="card table-wrap">
     <table>
-      <thead><tr><th>Thời điểm chạy</th><th>Kết quả</th><th>Tỉ lệ pass</th><th class="hide-sm">Game</th><th class="hide-sm">Browser</th><th class="hide-sm">Thời gian</th><th></th></tr></thead>
+      <thead><tr><th>Thời điểm chạy</th><th>Kết quả</th><th>Tỉ lệ pass</th><th class="hide-sm">Game</th><th class="hide-sm">Feature</th><th class="hide-sm">Browser</th><th class="hide-sm">Thời gian</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </section>
@@ -40,12 +40,16 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const fmtDur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${(ms / 1000).toFixed(1)}s`; };
 const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 const rateOf = (c) => (c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0);
+const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
+// Report cũ (trước khi tách feature) chỉ có meta.gameName và luôn là entry point
+const gamesOf = (r) => r.games?.map((g) => g.name) ?? [r.meta.gameName || r.meta.gameId];
+const featuresOf = (r) => (r.features ?? ['auth', 'entry-point']).map((f) => FEATURE_LABEL[f] ?? f);
 
 if (!RUNS.length) {
-  $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
+  $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
 } else {
   const last = RUNS[0];
-  const games = [...new Set(RUNS.map((r) => r.meta.gameName || r.meta.gameId))];
+  const games = [...new Set(RUNS.flatMap(gamesOf))];
   $('#meta').textContent = `${RUNS.length} report · ${games.join(', ')}`;
   $('#tiles').innerHTML = [
     [last.counts.failed ? 'fail' : 'pass', 'Lần chạy gần nhất', `${rateOf(last.counts)}%`],
@@ -65,7 +69,8 @@ if (!RUNS.length) {
       <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
       <td><span class="status ${r.counts.failed ? 'failed' : 'passed'}">${r.counts.failed ? `✕ ${r.counts.failed} fail` : '✓ Pass'}</span></td>
       <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
-      <td class="hide-sm">${esc(r.meta.gameName || r.meta.gameId)}</td>
+      <td class="hide-sm">${esc(gamesOf(r).join(', '))}</td>
+      <td class="hide-sm">${featuresOf(r).map((f) => `<span class="kind">${esc(f)}</span>`).join(' ')}</td>
       <td class="hide-sm mono muted">${esc(r.meta.browser)}</td>
       <td class="hide-sm muted">${fmtDur(r.durationMs)}</td>
       <td><a href="${esc(r.file)}">Xem →</a></td>

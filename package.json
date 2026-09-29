@@ -5,14 +5,15 @@
   "scripts": {
     "login": "tsx scripts/login.ts",
     "test": "playwright test",
-    "test:auth": "playwright test tests/auth.spec.ts",
-    "test:entry": "playwright test tests/game-entry.spec.ts",
-    "codegen": "playwright codegen --load-storage=.auth/fb-state.json https://www.facebook.com",
+    "test:auth": "playwright test features/auth",
+    "test:entry": "playwright test features/entry-point",
+    "codegen": "playwright codegen --load-storage=.auth/snake-escape/state.json https://www.facebook.com",
     "discover": "tsx scripts/discover-entry-points.ts",
     "game:buttons": "tsx scripts/game-buttons.ts",
     "report": "playwright show-report",
     "dashboard": "open docs/index.html",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:responsive": "playwright test features/responsive"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

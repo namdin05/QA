@@ -13,22 +13,14 @@
   <a class="back" href="../index.html">← Tất cả report</a>
   <header>
     <div>
-      <h1 id="title">Entry Point Report</h1>
+      <h1 id="title">Test Report</h1>
       <div class="sub" id="meta"></div>
     </div>
   </header>
 
   <section class="tiles" id="tiles"></section>
-
-  <div class="toolbar" id="filters" role="group" aria-label="Lọc"></div>
-  <section class="card table-wrap report">
-    <table>
-      <thead><tr>
-        <th>Trạng thái</th><th>Entry point</th><th class="hide-sm">Source</th><th>Expected</th><th>Actual</th><th>Vào game</th><th class="hide-sm">Thời gian</th><th>Bằng chứng</th>
-      </tr></thead>
-      <tbody id="rows"></tbody>
-    </table>
-  </section>
+  <nav class="toolbar" id="featureNav" aria-label="Feature"></nav>
+  <div id="sections"></div>
 </div>
 <dialog id="lightbox"><div id="lightboxBody"></div></dialog>
 
@@ -44,19 +36,27 @@ const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'sho
 const sourceOf = (t) => t.source || (t.url ? new URL(t.url).searchParams.get('source') : '') || '';
 const STATUS_LABEL = { passed: '✓ Pass', failed: '✕ Fail', timedOut: '✕ Timeout', interrupted: '✕ Dừng', skipped: '– Bỏ qua' };
 const isFail = (s) => ['failed', 'timedOut', 'interrupted'].includes(s);
+const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
+const featureLabel = (f) => FEATURE_LABEL[f] ?? f;
+const statusBadge = (s) => `<span class="status ${s}">${STATUS_LABEL[s] ?? s}</span>`;
 // Video của các lần chạy cũ bị dọn để repo không phình -> hiện thông báo thay vì khung đen
 const videoTag = (src, extra = '') =>
   `<video controls preload="metadata" ${extra} src="${esc(src)}" onerror="this.outerHTML='<div class=&quot;empty&quot;>Video không còn — chỉ giữ cho các lần chạy gần nhất</div>'"></video>`;
-const FILTERS = [['all', 'Tất cả'], ['fail', 'Chỉ fail'], ['UI', 'Qua UI'], ['URL', 'Qua URL']];
-let filter = 'all';
+
+// Hỗ trợ report cũ (trước khi tách feature) không có trường game/feature
+const tests = RUN.tests.map((t) => ({ ...t, feature: t.feature ?? (t.kind === 'Auth' ? 'auth' : 'entry-point'), checks: t.checks ?? [] }));
+const games = RUN.games ?? [{ slug: '', id: RUN.meta.gameId, name: RUN.meta.gameName, account: RUN.meta.account }];
+const features = [...new Set(tests.map((t) => t.feature))];
+const filters = {}; // feature -> filter
+let rowSeq = 0;
 
 function renderHeader() {
-  const m = RUN.meta;
-  document.title = `${m.gameName || 'Entry Point'} · ${fmtTime(RUN.startedAt)}`;
-  $('#title').textContent = m.gameName ? `${m.gameName} · Entry Point Report` : 'Entry Point Report';
+  const title = games.map((g) => g.name).filter(Boolean).join(', ') || 'Test Report';
+  document.title = `${title} · ${fmtTime(RUN.startedAt)}`;
+  $('#title').textContent = `${title} · Test Report`;
   $('#meta').innerHTML = [
-    `Game <code>${esc(m.gameId)}</code>`, `Account <code>${esc(m.account)}</code>`,
-    `Browser <code>${esc(m.browser)}</code>`, `Chạy lúc ${fmtTime(RUN.startedAt)}`,
+    ...games.map((g) => `Game <code>${esc(g.id)}</code> · Account <code>${esc(g.account)}</code>`),
+    `Browser <code>${esc(RUN.meta.browser)}</code>`, `Chạy lúc ${fmtTime(RUN.startedAt)}`,
   ].join(' · ');
   const c = RUN.counts;
   const rate = c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0;
@@ -64,60 +64,131 @@ function renderHeader() {
     [c.failed ? 'fail' : 'pass', 'Tỉ lệ pass', `${rate}%`], ['pass', 'Pass', c.passed], [c.failed ? 'fail' : '', 'Fail', c.failed],
     ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
   ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
-  $('#filters').innerHTML = FILTERS.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${k === filter}">${l}</button>`).join('');
+  $('#featureNav').innerHTML = features.length > 1 ? features.map((f) => {
+    const ts = tests.filter((t) => t.feature === f);
+    const failed = ts.filter((t) => isFail(t.status)).length;
+    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} <span class="${failed ? 'mismatch' : 'muted'}">${failed ? `${failed} fail` : ts.length}</span></a>`;
+  }).join('') : '';
 }
 
-function renderRows() {
-  const tests = RUN.tests.filter((t) => filter === 'all' || (filter === 'fail' ? isFail(t.status) : t.kind === filter));
-  if (!tests.length) { $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Không có test nào.</td></tr>'; return; }
-  $('#rows').innerHTML = tests.map((t, i) => {
-    const mismatch = t.actual && t.expected && t.actual !== t.expected;
-    const hasDetail = t.error || t.url || t.video || t.dashboardShot;
-    const playOk = t.play && !t.play.startsWith('skipped');
-    return `<tr class="main">
-      <td><span class="status ${t.status}">${STATUS_LABEL[t.status] ?? t.status}</span></td>
-      <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
-        ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}</td>
+// ───────────── Bảng (entry point, auth, feature khác) ─────────────
+const TABLE_FILTERS = [['all', 'Tất cả'], ['fail', 'Chỉ fail'], ['UI', 'Qua UI'], ['URL', 'Qua URL']];
+
+function tableSection(feature, list) {
+  const kinds = new Set(list.map((t) => t.kind));
+  const chips = TABLE_FILTERS.filter(([k]) => k === 'all' || k === 'fail' || kinds.has(k));
+  const f = filters[feature] ?? 'all';
+  const shown = list.filter((t) => f === 'all' || (f === 'fail' ? isFail(t.status) : t.kind === f));
+  const hasGameCol = list.some((t) => t.play);
+  const hasEpCols = list.some((t) => t.expected);
+  return `
+    ${list.length > 2 ? `<div class="toolbar" role="group" aria-label="Lọc">${chips.map(([k, l]) =>
+      `<button class="chip" data-feature="${esc(feature)}" data-f="${k}" aria-pressed="${k === f}">${l}</button>`).join('')}</div>` : ''}
+    <section class="card table-wrap report"><table>
+      <thead><tr>
+        <th>Trạng thái</th><th>Test</th>
+        ${hasEpCols ? '<th class="hide-sm">Source</th><th>Expected</th><th>Actual</th>' : ''}
+        ${hasGameCol ? '<th>Vào game</th>' : ''}
+        <th class="hide-sm">Thời gian</th><th>Bằng chứng</th>
+      </tr></thead>
+      <tbody>${shown.length ? shown.map((t) => tableRow(t, hasEpCols, hasGameCol)).join('') : '<tr><td colspan="9" class="empty">Không có test nào.</td></tr>'}</tbody>
+    </table></section>`;
+}
+
+function tableRow(t, hasEpCols, hasGameCol) {
+  const i = rowSeq++;
+  const mismatch = t.actual && t.expected && t.actual !== t.expected;
+  const hasDetail = t.error || t.url || t.video || t.dashboardShot;
+  const playOk = t.play && !t.play.startsWith('skipped');
+  const cols = 3 + (hasEpCols ? 3 : 0) + (hasGameCol ? 1 : 0);
+  return `<tr class="main">
+    <td>${statusBadge(t.status)}</td>
+    <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
+      ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}</td>
+    ${hasEpCols ? `
       <td class="hide-sm mono muted">${esc(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—'))}</td>
       <td class="mono">${esc(t.expected ?? '—')}</td>
-      <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>
-      <td class="play-cell">${playOk ? `<span class="mono">${esc(t.play)}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}` : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`}</td>
-      <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
-      <td><div class="proof">
-        ${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : ''}
-        ${t.video ? `<button class="chip play" data-video="${esc(t.video)}">▶ Video</button>` : ''}
-        ${!t.screenshot && !t.video ? '<span class="muted">—</span>' : ''}
-      </div></td>
-    </tr>
-    ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="8">
-      ${t.dashboardShot || t.video ? `<div class="evidence">
-        ${t.dashboardShot ? `<figure><img class="thumb big" src="${t.dashboardShot}" alt="Màn hình chính của game"><figcaption>Game load xong</figcaption></figure>` : ''}
-        ${t.screenshot && t.dashboardShot ? `<figure><img class="thumb big" src="${t.screenshot}" alt="Sau khi bấm nút"><figcaption>Sau khi bấm nút</figcaption></figure>` : ''}
-        ${t.video ? `<figure>${videoTag(t.video)}<figcaption>Video toàn bộ test</figcaption></figure>` : ''}
-      </div>` : ''}
-      ${t.url ? `<div class="mono muted" style="word-break:break-all;margin-bottom:6px">${esc(t.url)}</div>` : ''}
-      ${t.error ? `<pre class="err">${esc(t.error)}</pre>` : ''}
-    </td></tr>` : ''}`;
+      <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>` : ''}
+    ${hasGameCol ? `<td class="play-cell">${playOk ? `<span class="mono">${esc(t.play)}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}` : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`}</td>` : ''}
+    <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
+    <td><div class="proof">
+      ${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : ''}
+      ${t.video ? `<button class="chip play" data-video="${esc(t.video)}">▶ Video</button>` : ''}
+      ${!t.screenshot && !t.video ? '<span class="muted">—</span>' : ''}
+    </div></td>
+  </tr>
+  ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="${cols}">
+    ${t.dashboardShot || t.video ? `<div class="evidence">
+      ${t.dashboardShot ? `<figure><img class="thumb big" src="${t.dashboardShot}" alt="Màn hình chính của game"><figcaption>Game load xong</figcaption></figure>` : ''}
+      ${t.screenshot && t.dashboardShot ? `<figure><img class="thumb big" src="${t.screenshot}" alt="Sau khi bấm nút"><figcaption>Sau khi bấm nút</figcaption></figure>` : ''}
+      ${t.video ? `<figure>${videoTag(t.video)}<figcaption>Video toàn bộ test</figcaption></figure>` : ''}
+    </div>` : ''}
+    ${t.url ? `<div class="mono muted" style="word-break:break-all;margin-bottom:6px">${esc(t.url)}</div>` : ''}
+    ${t.error ? `<pre class="err">${esc(t.error)}</pre>` : ''}
+  </td></tr>` : ''}`;
+}
+
+// ───────────── Lưới thiết bị (responsive) ─────────────
+function deviceSection(list) {
+  return `<div class="devices">${list.map(deviceCard).join('')}</div>`;
+}
+
+function deviceCard(t) {
+  const d = t.device ?? {};
+  const [w, h] = String(d.viewport ?? '').split('×').map(Number);
+  const ratio = w && h ? `${w} / ${h}` : '9 / 16';
+  const spec = [
+    ['Loại', d.type ?? t.kind],
+    // OS lấy từ user agent của preset Playwright — là thông số giả lập, không phải máy thật
+    ['OS (theo UA)', d.os ?? '—'],
+    ['Viewport', `${d.viewport ?? '—'} CSS px`],
+    ['Màn hình', `${d.screen ?? '—'} px · DPR ${d.dpr ?? '—'}`],
+    ['Cảm ứng', d.touch ? 'Có (dùng tap)' : 'Không'],
+    ['Canvas game', t.canvas ? `${t.canvas} · ${t.layout ?? ''}` : '—'],
+    ['Load xong', t.readyMs ? fmtDur(t.readyMs) : '—'],
+  ];
+  return `<article class="card device">
+    <header class="device-head"><h3>${esc(t.name)}</h3>${statusBadge(t.status)}</header>
+    <div class="shots">
+      ${[['dashboardShot', 'Load xong'], ['screenshot', 'Sau khi chạm']].map(([k, cap]) => t[k] ? `
+        <figure><div class="frame" style="aspect-ratio:${ratio}"><img class="thumb shot" loading="lazy" src="${t[k]}" alt="${esc(t.name)} — ${cap}"></div>
+        <figcaption>${cap}</figcaption></figure>` : '').join('')}
+    </div>
+    <dl class="spec">${spec.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    ${t.checks.length ? `<ul class="checks">${t.checks.map((c) => `
+      <li class="${c.ok ? 'ok' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${esc(c.name)}
+        ${c.detail && !c.ok ? `<div class="mono muted">${esc(c.detail)}</div>` : ''}</li>`).join('')}</ul>` : ''}
+    ${t.error ? `<details><summary>Lỗi</summary><pre class="err">${esc(t.error)}</pre></details>` : ''}
+    <details class="ua"><summary>User agent</summary><div class="mono muted">${esc(d.userAgent ?? '')}</div></details>
+  </article>`;
+}
+
+function renderSections() {
+  rowSeq = 0;
+  $('#sections').innerHTML = features.map((f) => {
+    const list = tests.filter((t) => t.feature === f);
+    const failed = list.filter((t) => isFail(t.status)).length;
+    return `<section class="feature" id="f-${esc(f)}">
+      <h2>${esc(featureLabel(f))} <span class="muted">${list.length - failed}/${list.length} pass</span></h2>
+      ${f === 'responsive' ? `<p class="sub">Giả lập thiết bị (viewport, DPR, user agent, cảm ứng) trên ${esc(RUN.meta.browser)} — giống DevTools › Device Toolbar, không phải máy thật.</p>` : ''}
+      ${list.some((t) => t.device) ? deviceSection(list) : tableSection(f, list)}
+    </section>`;
   }).join('');
 }
 
-$('#filters').addEventListener('click', (e) => {
-  const f = e.target.dataset?.f; if (!f) return;
-  filter = f;
-  document.querySelectorAll('.chip').forEach((c) => c.setAttribute('aria-pressed', c.dataset.f === f));
-  renderRows();
-});
-$('#rows').addEventListener('click', (e) => {
-  const tg = e.target.dataset?.toggle;
-  if (tg !== undefined) { const d = $('#d' + tg); d.hidden = !d.hidden; e.target.textContent = d.hidden ? 'Chi tiết' : 'Ẩn'; }
-  if (e.target.classList.contains('thumb')) openLightbox(`<img src="${e.target.src}" alt="">`);
-  if (e.target.dataset?.video) openLightbox(videoTag(e.target.dataset.video, 'autoplay'));
+document.addEventListener('click', (e) => {
+  const el = e.target;
+  if (el.dataset?.f && el.dataset.feature) { filters[el.dataset.feature] = el.dataset.f; renderSections(); return; }
+  const tg = el.dataset?.toggle;
+  if (tg !== undefined) { const d = $('#d' + tg); d.hidden = !d.hidden; el.textContent = d.hidden ? 'Chi tiết' : 'Ẩn'; }
+  if (el.classList?.contains('thumb')) openLightbox(`<img src="${el.src}" alt="">`);
+  if (el.dataset?.video) openLightbox(videoTag(el.dataset.video, 'autoplay'));
 });
 function openLightbox(html) { $('#lightboxBody').innerHTML = html; $('#lightbox').showModal(); }
 // Bấm ra ngoài để đóng (bấm vào video thì không đóng, để còn tua)
 $('#lightbox').addEventListener('click', (e) => { if (e.target.tagName !== 'VIDEO') $('#lightbox').close(); });
 $('#lightbox').addEventListener('close', () => { $('#lightboxBody').innerHTML = ''; });
-renderHeader(); renderRows();
+renderHeader(); renderSections();
 </script>
 </body>
 </html>

@@ -1,20 +1,24 @@
 /**
- * Mở game và in ra scene hiện tại + các nút bấm được, để điền FB_GAME_READY_SCENE / FB_GAME_CHECK_BUTTON.
+ * Mở game và in ra scene hiện tại + các nút bấm được, để điền `cocos` trong games/<slug>/config.ts.
  *
- *   npm run game:buttons
+ *   npm run game:buttons -- <slug>
  */
+import { realUserAgent } from '../src/browser';
 import { chromium } from '@playwright/test';
-import { STATE_FILE, env } from '../src/config';
-import { gamePlayUrl, getGameFrame, getSceneName, listGameButtons, registerPopupHandlers, waitForGame } from '../src/game';
+import { getGame } from '../games';
+import { getSceneName, listGameButtons } from '../src/cocos';
+import { authPaths, env } from '../src/config';
+import { gamePlayUrl, getGameFrame, registerPopupHandlers, waitForGame } from '../src/game';
 
 async function main() {
+  const game = getGame(process.argv[2]);
   const browser = await chromium.launch({ channel: env.channel, headless: env.headless });
-  const context = await browser.newContext({ storageState: STATE_FILE, viewport: { width: 1440, height: 900 }, locale: 'vi-VN' });
+  const context = await browser.newContext({ userAgent: env.headless ? realUserAgent(browser, env.channel) : undefined, storageState: authPaths(game.slug).stateFile, viewport: { width: 1440, height: 900 }, locale: 'vi-VN' });
   const page = await context.newPage();
   await registerPopupHandlers(page);
-  await page.goto(gamePlayUrl(env.gameId));
-  await waitForGame(page, env.gameId);
-  const frame = getGameFrame(page, env.gameId);
+  await page.goto(gamePlayUrl(game.id));
+  await waitForGame(page, game.id);
+  const frame = getGameFrame(page, game.id);
 
   // Chờ scene ổn định (qua màn loading)
   let scene = await getSceneName(frame);
@@ -26,12 +30,12 @@ async function main() {
   }
 
   const { buttons } = await listGameButtons(frame);
-  console.log(`\nScene: ${scene}  → FB_GAME_READY_SCENE=${scene}\n`);
+  console.log(`\nScene: ${scene}  → cocos.readyScene = '${scene}'\n`);
   for (const b of buttons) {
     console.log(`${b.interactable ? '✔' : '🔒'} ${b.path}${b.labels.length ? `  [${b.labels.join(', ')}]` : ''}`);
   }
-  console.log('\nChọn nút (vd Settings) rồi điền vào FB_GAME_CHECK_BUTTON=<đường dẫn>');
-  console.log('Sau đó điền FB_GAME_CHECK_EXPECT_NODE = node popup hiện ra khi bấm (để trống nếu nút đó đổi scene)');
+  console.log('\nChọn nút (vd Settings) rồi điền vào cocos.checkButton');
+  console.log('Sau đó điền cocos.checkExpectNode = node popup hiện ra khi bấm (để trống nếu nút đó đổi scene)');
   await browser.close();
 }
 

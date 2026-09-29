@@ -89,6 +89,33 @@
   .report table { min-width: 1080px; }
   .report td .name { display: inline-block; min-width: 180px; }
   .play-cell { font-size: 12px; white-space: nowrap; }
+  /* Report chia theo feature */
+  .feature { margin-top: 28px; }
+  .feature h2 { font-size: 18px; margin: 0 0 10px; }
+  .feature h2 .muted { font-size: 14px; font-weight: 400; }
+  .feature > .sub { margin: -4px 0 12px; }
+  #featureNav:empty { display: none; }
+  #featureNav .chip { text-decoration: none; }
+  /* Lưới thiết bị (responsive) */
+  .devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+  .device { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .device-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .device-head h3 { margin: 0; font-size: 15px; }
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .shots figure { margin: 0; }
+  .shots figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: center; }
+  .frame { background: #000; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); max-height: 360px; display: flex; justify-content: center; }
+  .thumb.shot { width: 100%; height: 100%; object-fit: contain; border: 0; border-radius: 0; }
+  .spec { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 13px; }
+  .spec dt { color: var(--muted); }
+  .spec dd { margin: 0; }
+  .checks { list-style: none; padding: 0; margin: 0; font-size: 13px; display: grid; gap: 4px; }
+  .checks li.ok span { color: var(--pass); font-weight: 700; }
+  .checks li.bad { color: var(--fail); }
+  .checks li.bad span { font-weight: 700; }
+  .device details { font-size: 12px; }
+  .device details summary { cursor: pointer; color: var(--muted); }
+  .ua .mono { word-break: break-all; margin-top: 4px; }
 
 </style>
 </head>
@@ -109,7 +136,7 @@
 
   <section class="card table-wrap">
     <table>
-      <thead><tr><th>Thời điểm chạy</th><th>Kết quả</th><th>Tỉ lệ pass</th><th class="hide-sm">Game</th><th class="hide-sm">Browser</th><th class="hide-sm">Thời gian</th><th></th></tr></thead>
+      <thead><tr><th>Thời điểm chạy</th><th>Kết quả</th><th>Tỉ lệ pass</th><th class="hide-sm">Game</th><th class="hide-sm">Feature</th><th class="hide-sm">Browser</th><th class="hide-sm">Thời gian</th><th></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
   </section>
@@ -117,19 +144,23 @@
 
 <script>
 // Danh sách report được reporter nhúng vào lúc build, mới nhất trước
-const RUNS = [{"id":"2026-09-28T11-27-52-253Z","file":"reports/2026-09-28T11-27-52-253Z.html","startedAt":"2026-09-28T11:27:52.253Z","durationMs":186276.96,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T10-46-25-603Z","file":"reports/2026-09-28T10-46-25-603Z.html","startedAt":"2026-09-28T10:46:25.603Z","durationMs":204331.89800000002,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T09-03-54-323Z","file":"reports/2026-09-28T09-03-54-323Z.html","startedAt":"2026-09-28T09:03:54.323Z","durationMs":106362.816,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}}];
+const RUNS = [{"id":"2026-09-29T04-42-47-461Z","file":"reports/2026-09-29T04-42-47-461Z.html","startedAt":"2026-09-29T04:42:47.461Z","durationMs":335589.555,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-29-08-336Z","file":"reports/2026-09-29T04-29-08-336Z.html","startedAt":"2026-09-29T04:29:08.336Z","durationMs":335608.162,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-27-17-029Z","file":"reports/2026-09-29T04-27-17-029Z.html","startedAt":"2026-09-29T04:27:17.029Z","durationMs":102627.336,"status":"passed","counts":{"total":8,"passed":8,"failed":0,"skipped":0},"features":["responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T11-27-52-253Z","file":"reports/2026-09-28T11-27-52-253Z.html","startedAt":"2026-09-28T11:27:52.253Z","durationMs":186276.96,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T10-46-25-603Z","file":"reports/2026-09-28T10-46-25-603Z.html","startedAt":"2026-09-28T10:46:25.603Z","durationMs":204331.89800000002,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T09-03-54-323Z","file":"reports/2026-09-28T09-03-54-323Z.html","startedAt":"2026-09-28T09:03:54.323Z","durationMs":106362.816,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}}];
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmtDur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${(ms / 1000).toFixed(1)}s`; };
 const fmtTime = (iso) => new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' });
 const rateOf = (c) => (c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0);
+const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
+// Report cũ (trước khi tách feature) chỉ có meta.gameName và luôn là entry point
+const gamesOf = (r) => r.games?.map((g) => g.name) ?? [r.meta.gameName || r.meta.gameId];
+const featuresOf = (r) => (r.features ?? ['auth', 'entry-point']).map((f) => FEATURE_LABEL[f] ?? f);
 
 if (!RUNS.length) {
-  $('#rows').innerHTML = '<tr><td colspan="7" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
+  $('#rows').innerHTML = '<tr><td colspan="8" class="empty">Chưa có report nào. Chạy <code>npm test</code> để tạo.</td></tr>';
 } else {
   const last = RUNS[0];
-  const games = [...new Set(RUNS.map((r) => r.meta.gameName || r.meta.gameId))];
+  const games = [...new Set(RUNS.flatMap(gamesOf))];
   $('#meta').textContent = `${RUNS.length} report · ${games.join(', ')}`;
   $('#tiles').innerHTML = [
     [last.counts.failed ? 'fail' : 'pass', 'Lần chạy gần nhất', `${rateOf(last.counts)}%`],
@@ -149,7 +180,8 @@ if (!RUNS.length) {
       <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
       <td><span class="status ${r.counts.failed ? 'failed' : 'passed'}">${r.counts.failed ? `✕ ${r.counts.failed} fail` : '✓ Pass'}</span></td>
       <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
-      <td class="hide-sm">${esc(r.meta.gameName || r.meta.gameId)}</td>
+      <td class="hide-sm">${esc(gamesOf(r).join(', '))}</td>
+      <td class="hide-sm">${featuresOf(r).map((f) => `<span class="kind">${esc(f)}</span>`).join(' ')}</td>
       <td class="hide-sm mono muted">${esc(r.meta.browser)}</td>
       <td class="hide-sm muted">${fmtDur(r.durationMs)}</td>
       <td><a href="${esc(r.file)}">Xem →</a></td>

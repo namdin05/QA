@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
-import { FB_URL } from './config';
-import { gamePlayUrl } from './game';
+import { FB_URL } from '../../src/config';
+import { gamePlayUrl } from '../../src/game';
 
 export type EntryPointCase = {
   name: string;
@@ -10,7 +10,6 @@ export type EntryPointCase = {
   via?: RegExp;
   /** Đưa người dùng từ Facebook vào game */
   open: (page: Page, game: { id: string; name: string }) => Promise<void>;
-  needsGameName?: boolean;
 };
 
 /**
@@ -86,7 +85,6 @@ export const UI_ENTRY_POINTS: EntryPointCase[] = [
     name: 'Gaming hub › ô Tìm kiếm game',
     expected: 'shareable_link',
     via: /^fb_gg_url$/,
-    needsGameName: true,
     open: async (page, game) => {
       await page.goto(`${FB_URL}/gaming/play/`);
       const search = page.getByRole('searchbox', { name: /tìm kiếm game|search games/i })
@@ -98,7 +96,6 @@ export const UI_ENTRY_POINTS: EntryPointCase[] = [
     name: 'Thanh tìm kiếm Facebook › kết quả',
     expected: 'shareable_link',
     via: /^fb_gg_url$/,
-    needsGameName: true,
     open: async (page, game) => {
       await page.goto(FB_URL);
       const search = page.getByRole('combobox', { name: /tìm kiếm trên facebook|search facebook/i });

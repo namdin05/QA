@@ -4,17 +4,18 @@
  *  2. Thử thêm một số giá trị `source` đoán trước
  *  3. Mở từng URL, đọc FBInstant.getEntryPointAsync() để biết game nhận entry point gì
  *
- *   npm run discover
+ *   npm run discover -- <slug>
  *
- * Kết quả in ra bảng và lưu vào reports/entry-points.json
+ * Kết quả in ra bảng và lưu vào reports/<slug>/entry-points.json
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { realUserAgent } from '../src/browser';
 import { chromium, type Page } from '@playwright/test';
-import { FB_URL, STATE_FILE, env } from '../src/config';
+import { getGame } from '../games';
+import { FB_URL, authPaths, env } from '../src/config';
 import { gamePlayUrl, registerPopupHandlers, waitForGame } from '../src/game';
 
-const REPORT_FILE = path.resolve(__dirname, '..', 'reports', 'entry-points.json');
 
 // Giá trị đoán thêm — không có trong link nào vẫn thử để xem Facebook map ra entry point gì
 const GUESSED_SOURCES = [
@@ -39,19 +40,18 @@ async function collectGameLinks(page: Page, gameId: string, surfaces: string[]):
 }
 
 async function main() {
-  const gameId = env.gameId;
-  if (!gameId) throw new Error('Thiếu FB_GAME_ID trong .env');
-  if (!fs.existsSync(STATE_FILE)) throw new Error('Chưa có session. Chạy `npm run login` trước.');
+  const game = getGame(process.argv[2]);
+  const gameId = game.id;
+  const reportFile = path.resolve(__dirname, '..', 'reports', game.slug, 'entry-points.json');
+  const { stateFile } = authPaths(game.slug);
+  if (!fs.existsSync(stateFile)) throw new Error(`Chưa có session. Chạy \`npm run login -- ${game.slug}\` trước.`);
 
   const browser = await chromium.launch({ channel: env.channel, headless: env.headless });
-  const context = await browser.newContext({ storageState: STATE_FILE, viewport: { width: 1440, height: 900 }, locale: 'vi-VN' });
+  const context = await browser.newContext({ userAgent: env.headless ? realUserAgent(browser, env.channel) : undefined, storageState: stateFile, viewport: { width: 1440, height: 900 }, locale: 'vi-VN' });
   const page = await context.newPage();
   await registerPopupHandlers(page);
 
-  // Lấy tên game để tìm kiếm
-  await page.goto(gamePlayUrl(gameId), { waitUntil: 'domcontentloaded' });
-  await waitForGame(page, gameId);
-  const gameName = (await page.title()).replace(/\s*[|\-–].*$/, '').trim();
+  const gameName = game.name;
   console.log(`Game: ${gameName} (${gameId})\n\n[1] Quét link trên các bề mặt Facebook`);
 
   const linkSources = await collectGameLinks(page, gameId, [
@@ -82,9 +82,9 @@ async function main() {
     results.push(row);
   }
 
-  fs.mkdirSync(path.dirname(REPORT_FILE), { recursive: true });
-  fs.writeFileSync(REPORT_FILE, JSON.stringify({ gameId, gameName, at: new Date().toISOString(), results }, null, 2));
-  console.log(`\n✔ Đã lưu ${REPORT_FILE}`);
+  fs.mkdirSync(path.dirname(reportFile), { recursive: true });
+  fs.writeFileSync(reportFile, JSON.stringify({ gameId, gameName, at: new Date().toISOString(), results }, null, 2));
+  console.log(`\n✔ Đã lưu ${reportFile}`);
   await browser.close();
 }
 

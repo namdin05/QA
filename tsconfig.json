@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src", "scripts", "tests", "playwright.config.ts"]
+  "include": ["src", "scripts", "features", "games", "reporters", "playwright.config.ts"]
 }

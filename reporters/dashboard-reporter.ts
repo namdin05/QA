@@ -6,17 +6,25 @@
  *   docs/reports/<runId>/<n>.webm    video từng test — chỉ giữ cho `maxVideoRuns` lần chạy gần nhất
  *   docs/reports/runs.json           manifest để build lại landing page
  *
+ * Test ghi dữ liệu qua annotation `r.*` (xem src/report.ts). Game lấy theo project, feature lấy theo
+ * thư mục chứa file test: features/<feature>/ hoặc games/<slug>/features/<feature>/.
+ *
  * GitHub Pages là public -> KHÔNG xuất trace (chứa cookie đăng nhập) và cắt token khỏi URL.
  * Video chỉ là hình ảnh màn hình, không chứa cookie.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FullConfig, FullResult, Reporter, TestCase, TestResult } from '@playwright/test/reporter';
-import { env } from '../src/config';
+import { GAMES } from '../games';
+import { env, gameAccount } from '../src/config';
 
 type Options = { outputDir?: string; maxRuns?: number; maxVideoRuns?: number };
 
+type Check = { name: string; ok: boolean; detail?: string };
+
 type TestRow = {
+  game: string;
+  feature: string;
   kind: string;
   name: string;
   source?: string;
@@ -27,6 +35,11 @@ type TestRow = {
   play?: string;
   /** Thời gian từ lúc bắt đầu tới khi game vào màn hình chính */
   readyMs?: number;
+  /** Thông tin thiết bị giả lập (feature responsive) */
+  device?: Record<string, unknown>;
+  layout?: string;
+  canvas?: string;
+  checks: Check[];
   status: TestResult['status'];
   durationMs: number;
   error?: string;
@@ -45,7 +58,9 @@ type RunSummary = {
   durationMs: number;
   status: FullResult['status'];
   counts: { total: number; passed: number; failed: number; skipped: number };
-  meta: { gameId: string; gameName: string; account: string; browser: string; playwright: string };
+  features: string[];
+  games: { slug: string; id: string; name: string; account: string }[];
+  meta: { browser: string; playwright: string };
 };
 
 const ROOT = path.resolve(__dirname, '..');
@@ -80,6 +95,13 @@ function renderTemplate(name: string, placeholder: string, data: unknown): strin
     .replace(placeholder, () => toScriptJson(data));
 }
 
+/** features/entry-point/x.spec.ts -> entry-point; games/<slug>/features/shop/x.spec.ts -> shop */
+function featureOf(test: TestCase): string {
+  const rel = path.relative(ROOT, test.location.file).split(path.sep);
+  const i = rel.lastIndexOf('features');
+  return i >= 0 && rel[i + 1] ? rel[i + 1] : 'other';
+}
+
 export default class DashboardReporter implements Reporter {
   private readonly outputDir: string;
   private readonly maxRuns: number;
@@ -105,12 +127,18 @@ export default class DashboardReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult) {
-    const ann = (type: string) => test.annotations.findLast((a) => a.type === `ep.${type}`)?.description;
+    // Test bị skip vì game không áp dụng (vd thiết bị không có trong config game) -> không đưa lên report
+    if (test.annotations.some((a) => a.type === 'r.na')) return;
+    const all = (type: string) => test.annotations.filter((a) => a.type === `r.${type}`).map((a) => a.description ?? '');
+    const ann = (type: string) => all(type).at(-1);
     const url = ann('url');
     const readyMs = ann('ready_ms');
+    const device = ann('device');
 
     // Map theo test.id: nếu có retry thì lần sau ghi đè lần trước
     this.rows.set(test.id, {
+      game: test.parent.project()?.name ?? '',
+      feature: featureOf(test),
       kind: ann('kind') ?? 'Khác',
       name: ann('name') ?? test.title,
       source: ann('source'),
@@ -119,6 +147,10 @@ export default class DashboardReporter implements Reporter {
       url: url && sanitizeUrl(url),
       play: ann('play'),
       readyMs: readyMs ? Number(readyMs) : undefined,
+      device: device ? JSON.parse(device) : undefined,
+      layout: ann('layout'),
+      canvas: ann('canvas'),
+      checks: all('check').map((c) => JSON.parse(c) as Check),
       status: result.status,
       durationMs: result.duration,
       error: result.errors.length
@@ -154,7 +186,10 @@ export default class DashboardReporter implements Reporter {
 
   onEnd(result: FullResult) {
     const rows = [...this.rows.values()];
+    // `--list`, hoặc filter không khớp test nào -> không tạo report rỗng
+    if (!rows.length) return;
     const count = (s: TestResult['status'][]) => rows.filter((r) => s.includes(r.status)).length;
+    const slugs = [...new Set(rows.map((r) => r.game))];
     const summary: RunSummary = {
       id: this.runId,
       file: `reports/${this.runId}.html`,
@@ -167,10 +202,12 @@ export default class DashboardReporter implements Reporter {
         failed: count(['failed', 'timedOut', 'interrupted']),
         skipped: count(['skipped']),
       },
+      features: [...new Set(rows.map((r) => r.feature))],
+      games: slugs.map((slug) => {
+        const game = GAMES.find((g) => g.slug === slug);
+        return { slug, id: game?.id ?? '', name: game?.name ?? slug, account: maskEmail(gameAccount(slug).email) };
+      }),
       meta: {
-        gameId: env.gameId,
-        gameName: env.gameName,
-        account: maskEmail(env.email),
         browser: env.channel ?? 'chromium',
         playwright: this.config?.version ?? '',
       },

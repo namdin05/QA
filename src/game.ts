@@ -67,6 +67,11 @@ export async function waitForGame(page: Page, gameId: string, timeoutMs = 60_000
   while (Date.now() < deadline) {
     await acceptFirstPlayDialog(page);
 
+    // Trình duyệt quá cũ (vd giả lập iOS 10) -> Facebook hiện thông báo thay vì game
+    if (await page.getByText(/cập nhật trình duyệt|update your browser/i).first().isVisible().catch(() => false)) {
+      throw new Error('Facebook không hỗ trợ trình duyệt/thiết bị này ("hãy cập nhật trình duyệt hoặc tải ứng dụng")');
+    }
+
     // Account không có quyền chơi game này -> Facebook đá về trang hub /gaming/play/
     if (/^\/gaming\/play\/?$/.test(new URL(page.url()).pathname)) {
       throw new Error(`Bị chuyển về Gaming hub (${page.url()}) — account có quyền chơi game ${gameId} không?`);
@@ -91,103 +96,8 @@ export async function registerPopupHandlers(page: Page): Promise<void> {
   });
 }
 
-// ───────────────────────── Tương tác trong game (Cocos Creator) ─────────────────────────
-// Game vẽ trên <canvas> nên không có DOM để chọn. Ta hỏi engine vị trí node rồi click chuột thật
-// vào đúng toạ độ đó -> đi qua toàn bộ pipeline input của game như người chơi thật.
-// Lưu ý: không khai báo hàm con trong evaluate() (esbuild chèn `__name` không có trong trình duyệt).
-
 export function getGameFrame(page: Page, gameId: string): Frame {
   const frame = findGameFrame(page, gameId);
   if (!frame) throw new Error('Không tìm thấy iframe game');
   return frame;
-}
-
-export async function getSceneName(frame: Frame): Promise<string | null> {
-  return frame.evaluate(() => (window as any).cc?.director?.getScene?.()?.name ?? null).catch(() => null);
-}
-
-export async function waitForScene(frame: Frame, sceneName: string, timeoutMs = 60_000): Promise<void> {
-  await frame.waitForFunction((name) => (window as any).cc?.director?.getScene?.()?.name === name, sceneName, {
-    timeout: timeoutMs,
-    polling: 250,
-  });
-}
-
-export async function isNodeActive(frame: Frame, nodePath: string): Promise<boolean> {
-  return frame.evaluate((path) => {
-    const cc = (window as any).cc;
-    return !!cc?.find(path, cc.director.getScene())?.activeInHierarchy;
-  }, nodePath);
-}
-
-/** Chờ một node (vd popup) hiện ra trong scene */
-export async function waitForNodeActive(frame: Frame, nodePath: string, timeoutMs = 15_000): Promise<void> {
-  await frame.waitForFunction(
-    (path) => {
-      const cc = (window as any).cc;
-      return !!cc?.find(path, cc.director.getScene())?.activeInHierarchy;
-    },
-    nodePath,
-    { timeout: timeoutMs, polling: 100 },
-  );
-}
-
-/** Chờ game rời khỏi scene hiện tại (vd bấm Play -> vào màn chơi) */
-export async function waitForSceneChange(frame: Frame, fromScene: string, timeoutMs = 15_000): Promise<void> {
-  await frame.waitForFunction((from) => (window as any).cc?.director?.getScene?.()?.name !== from, fromScene, {
-    timeout: timeoutMs,
-    polling: 100,
-  });
-}
-
-/** Toạ độ (CSS px, so với canvas) của node Cocos theo đường dẫn tính từ scene, vd `Canvas/UI/Buttons/Play` */
-async function nodeCanvasPosition(frame: Frame, nodePath: string) {
-  return frame.evaluate((path) => {
-    const cc = (window as any).cc;
-    const scene = cc.director.getScene();
-    const node = cc.find(path, scene);
-    if (!node) return { error: `Không có node "${path}" trong scene ${scene.name}` };
-    if (!node.activeInHierarchy) return { error: `Node "${path}" đang ẩn` };
-    const button = node.getComponent(cc.Button);
-    if (button && !button.interactable) return { error: `Nút "${path}" đang bị khoá (interactable=false)` };
-
-    const cameras = scene.getComponentsInChildren(cc.Camera);
-    const camera = cameras.find((c: any) => (c.visibility & node.layer) !== 0) ?? cameras[0];
-    // worldToScreen trả về pixel thật của canvas, gốc ở góc DƯỚI-trái
-    const screen = camera.worldToScreen(node.getWorldPosition());
-    const canvas = document.getElementById('GameCanvas') as HTMLCanvasElement;
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (screen.x * rect.width) / canvas.width,
-      y: ((canvas.height - screen.y) * rect.height) / canvas.height,
-    };
-  }, nodePath);
-}
-
-/** Click chuột thật vào một node Cocos (thường là nút cc.Button) */
-export async function clickGameNode(frame: Frame, nodePath: string): Promise<void> {
-  const pos = await nodeCanvasPosition(frame, nodePath);
-  if ('error' in pos) throw new Error(pos.error);
-  await frame.locator('#GameCanvas').click({ position: pos });
-}
-
-/** Liệt kê các nút đang hiển thị trong scene — dùng để tìm đường dẫn nút khi cấu hình game mới */
-export async function listGameButtons(frame: Frame) {
-  return frame.evaluate(() => {
-    const cc = (window as any).cc;
-    const scene = cc.director.getScene();
-    const buttons: { path: string; labels: string[]; interactable: boolean }[] = [];
-    const stack: [any, string][] = scene.children.map((c: any) => [c, c.name]);
-    while (stack.length) {
-      const [node, path] = stack.pop()!;
-      if (!node.activeInHierarchy) continue;
-      const button = node.getComponent(cc.Button);
-      if (button) {
-        const labels = node.getComponentsInChildren(cc.Label).map((l: any) => l.string).filter(Boolean);
-        buttons.push({ path, labels: [...new Set<string>(labels)], interactable: button.interactable });
-      }
-      for (const child of node.children) stack.push([child, `${path}/${child.name}`]);
-    }
-    return { scene: scene.name, buttons };
-  });
 }
