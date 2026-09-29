@@ -20,7 +20,7 @@ import { env, gameAccount } from '../src/config';
 
 type Options = { outputDir?: string; maxRuns?: number; maxVideoRuns?: number };
 
-type Check = { name: string; ok: boolean; detail?: string };
+type Check = { name: string; status: 'pass' | 'warn' | 'fail'; ok: boolean; detail?: string };
 
 type TestRow = {
   game: string;
@@ -57,7 +57,8 @@ type RunSummary = {
   startedAt: string;
   durationMs: number;
   status: FullResult['status'];
-  counts: { total: number; passed: number; failed: number; skipped: number };
+  /** warned = số test pass nhưng có ít nhất 1 kiểm tra ⚠ */
+  counts: { total: number; passed: number; failed: number; skipped: number; warned: number };
   features: string[];
   games: { slug: string; id: string; name: string; account: string }[];
   meta: { browser: string; playwright: string };
@@ -201,6 +202,7 @@ export default class DashboardReporter implements Reporter {
         passed: count(['passed']),
         failed: count(['failed', 'timedOut', 'interrupted']),
         skipped: count(['skipped']),
+        warned: rows.filter((r) => r.status === 'passed' && r.checks.some((c) => c.status === 'warn')).length,
       },
       features: [...new Set(rows.map((r) => r.feature))],
       games: slugs.map((slug) => {

@@ -39,6 +39,12 @@ const isFail = (s) => ['failed', 'timedOut', 'interrupted'].includes(s);
 const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
 const featureLabel = (f) => FEATURE_LABEL[f] ?? f;
 const statusBadge = (s) => `<span class="status ${s}">${STATUS_LABEL[s] ?? s}</span>`;
+// Report cũ chỉ có `ok`; report mới có thêm mức `warn` (sai lệch trong ngưỡng cho phép)
+const checkStatus = (c) => c.status ?? (c.ok ? 'pass' : 'fail');
+const warnCount = (t) => t.checks.filter((c) => checkStatus(c) === 'warn').length;
+/** Badge của test: pass nhưng có cảnh báo -> ⚠ */
+const testBadge = (t) => t.status === 'passed' && warnCount(t)
+  ? `<span class="status warned">⚠ Pass · ${warnCount(t)} cảnh báo</span>` : statusBadge(t.status);
 // Video của các lần chạy cũ bị dọn để repo không phình -> hiện thông báo thay vì khung đen
 const videoTag = (src, extra = '') =>
   `<video controls preload="metadata" ${extra} src="${esc(src)}" onerror="this.outerHTML='<div class=&quot;empty&quot;>Video không còn — chỉ giữ cho các lần chạy gần nhất</div>'"></video>`;
@@ -60,14 +66,17 @@ function renderHeader() {
   ].join(' · ');
   const c = RUN.counts;
   const rate = c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0;
+  const warned = c.warned ?? tests.filter((t) => t.status === 'passed' && warnCount(t)).length;
   $('#tiles').innerHTML = [
     [c.failed ? 'fail' : 'pass', 'Tỉ lệ pass', `${rate}%`], ['pass', 'Pass', c.passed], [c.failed ? 'fail' : '', 'Fail', c.failed],
-    ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
+    [warned ? 'warn' : '', 'Cảnh báo', warned], ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
   ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
   $('#featureNav').innerHTML = features.length > 1 ? features.map((f) => {
     const ts = tests.filter((t) => t.feature === f);
     const failed = ts.filter((t) => isFail(t.status)).length;
-    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} <span class="${failed ? 'mismatch' : 'muted'}">${failed ? `${failed} fail` : ts.length}</span></a>`;
+    const warns = ts.filter((t) => t.status === 'passed' && warnCount(t)).length;
+    const badge = failed ? `<span class="mismatch">${failed} fail</span>` : warns ? `<span class="status warned">⚠ ${warns}</span>` : `<span class="muted">${ts.length}</span>`;
+    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} ${badge}</a>`;
   }).join('') : '';
 }
 
@@ -87,13 +96,18 @@ function tableSection(feature, list) {
     <section class="card table-wrap report"><table>
       <thead><tr>
         <th>Trạng thái</th><th>Test</th>
-        ${hasEpCols ? '<th class="hide-sm">Source</th><th>Expected</th><th>Actual</th>' : ''}
+        ${hasEpCols ? '<th>Source</th><th>Expected</th><th>Actual</th>' : ''}
         ${hasGameCol ? '<th>Vào game</th>' : ''}
-        <th class="hide-sm">Thời gian</th><th>Bằng chứng</th>
+        <th>Thời gian</th><th>Bằng chứng</th>
       </tr></thead>
       <tbody>${shown.length ? shown.map((t) => tableRow(t, hasEpCols, hasGameCol)).join('') : '<tr><td colspan="9" class="empty">Không có test nào.</td></tr>'}</tbody>
     </table></section>`;
 }
+
+/** Ô bảng: nhãn cột (hiện khi màn hẹp xếp dọc) + nội dung bọc trong .cell */
+const cell = (label, html, cls = '') => `<td data-label="${label}" class="${cls}"><div class="cell">${html}</div></td>`;
+/** Cho phép xuống dòng sau `_` / `~` thay vì cắt giữa chữ (vd web_games_hub) */
+const breakable = (s) => esc(s).replace(/([_~])/g, '$1<wbr>');
 
 function tableRow(t, hasEpCols, hasGameCol) {
   const i = rowSeq++;
@@ -102,20 +116,22 @@ function tableRow(t, hasEpCols, hasGameCol) {
   const playOk = t.play && !t.play.startsWith('skipped');
   const cols = 3 + (hasEpCols ? 3 : 0) + (hasGameCol ? 1 : 0);
   return `<tr class="main">
-    <td>${statusBadge(t.status)}</td>
-    <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
-      ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}</td>
+    ${cell('Trạng thái', statusBadge(t.status))}
+    ${cell('Test', `<span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
+      ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}`)}
     ${hasEpCols ? `
-      <td class="hide-sm mono muted">${esc(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—'))}</td>
-      <td class="mono">${esc(t.expected ?? '—')}</td>
-      <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>` : ''}
-    ${hasGameCol ? `<td class="play-cell">${playOk ? `<span class="mono">${esc(t.play)}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}` : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`}</td>` : ''}
-    <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
-    <td><div class="proof">
+      ${cell('Source', breakable(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—')), 'mono muted')}
+      ${cell('Expected', breakable(t.expected ?? '—'), 'mono')}
+      ${cell('Actual', breakable(t.actual ?? '—'), `mono ${mismatch ? 'mismatch' : ''}`)}` : ''}
+    ${hasGameCol ? cell('Vào game', playOk
+      ? `<span class="mono">${esc(t.play).replace(' → ', ' →<wbr> ')}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}`
+      : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`, 'play-cell') : ''}
+    ${cell('Thời gian', fmtDur(t.durationMs), 'muted')}
+    ${cell('Bằng chứng', `<div class="proof">
       ${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : ''}
       ${t.video ? `<button class="chip play" data-video="${esc(t.video)}">▶ Video</button>` : ''}
       ${!t.screenshot && !t.video ? '<span class="muted">—</span>' : ''}
-    </div></td>
+    </div>`)}
   </tr>
   ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="${cols}">
     ${t.dashboardShot || t.video ? `<div class="evidence">
@@ -147,17 +163,20 @@ function deviceCard(t) {
     ['Canvas game', t.canvas ? `${t.canvas} · ${t.layout ?? ''}` : '—'],
     ['Load xong', t.readyMs ? fmtDur(t.readyMs) : '—'],
   ];
-  return `<article class="card device">
-    <header class="device-head"><h3>${esc(t.name)}</h3>${statusBadge(t.status)}</header>
+  return `<article class="card device ${warnCount(t) && t.status === 'passed' ? 'has-warn' : ''}">
+    <header class="device-head"><h3>${esc(t.name)}</h3>${testBadge(t)}</header>
     <div class="shots">
       ${[['dashboardShot', 'Load xong'], ['screenshot', 'Sau khi chạm']].map(([k, cap]) => t[k] ? `
         <figure><div class="frame" style="aspect-ratio:${ratio}"><img class="thumb shot" loading="lazy" src="${t[k]}" alt="${esc(t.name)} — ${cap}"></div>
         <figcaption>${cap}</figcaption></figure>` : '').join('')}
     </div>
     <dl class="spec">${spec.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    ${t.checks.length ? `<ul class="checks">${t.checks.map((c) => `
-      <li class="${c.ok ? 'ok' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${esc(c.name)}
-        ${c.detail && !c.ok ? `<div class="mono muted">${esc(c.detail)}</div>` : ''}</li>`).join('')}</ul>` : ''}
+    ${t.checks.length ? `<ul class="checks">${t.checks.map((c) => {
+      const s = checkStatus(c);
+      const [cls, icon, label] = { pass: ['ok', '✓', 'Đạt'], warn: ['warn', '⚠', 'Cảnh báo'], fail: ['bad', '✕', 'Không đạt'] }[s];
+      return `<li class="${cls}"><span aria-hidden="true">${icon}</span> ${esc(c.name)}<span class="sr-only"> — ${label}</span>
+        ${c.detail && s !== 'pass' ? `<div class="check-detail">${esc(c.detail)}</div>` : ''}</li>`;
+    }).join('')}</ul>` : ''}
     ${t.error ? `<details><summary>Lỗi</summary><pre class="err">${esc(t.error)}</pre></details>` : ''}
     <details class="ua"><summary>User agent</summary><div class="mono muted">${esc(d.userAgent ?? '')}</div></details>
   </article>`;
@@ -168,8 +187,10 @@ function renderSections() {
   $('#sections').innerHTML = features.map((f) => {
     const list = tests.filter((t) => t.feature === f);
     const failed = list.filter((t) => isFail(t.status)).length;
+    const warns = list.filter((t) => t.status === 'passed' && warnCount(t)).length;
     return `<section class="feature" id="f-${esc(f)}">
-      <h2>${esc(featureLabel(f))} <span class="muted">${list.length - failed}/${list.length} pass</span></h2>
+      <h2>${esc(featureLabel(f))} <span class="muted">${list.length - failed}/${list.length} pass</span>
+        ${warns ? `<span class="status warned">⚠ ${warns} có cảnh báo</span>` : ''}</h2>
       ${f === 'responsive' ? `<p class="sub">Giả lập thiết bị (viewport, DPR, user agent, cảm ứng) trên ${esc(RUN.meta.browser)} — giống DevTools › Device Toolbar, không phải máy thật.</p>` : ''}
       ${list.some((t) => t.device) ? deviceSection(list) : tableSection(f, list)}
     </section>`;

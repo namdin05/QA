@@ -1,5 +1,36 @@
 [
   {
+    "id": "2026-09-29T05-00-58-554Z",
+    "file": "reports/2026-09-29T05-00-58-554Z.html",
+    "startedAt": "2026-09-29T05:00:58.554Z",
+    "durationMs": 352144.458,
+    "status": "passed",
+    "counts": {
+      "total": 25,
+      "passed": 25,
+      "failed": 0,
+      "skipped": 0,
+      "warned": 3
+    },
+    "features": [
+      "auth",
+      "entry-point",
+      "responsive"
+    ],
+    "games": [
+      {
+        "slug": "snake-escape",
+        "id": "1329094249218455",
+        "name": "Snake Escape Puzzle",
+        "account": "mk***@tfbnw.net"
+      }
+    ],
+    "meta": {
+      "browser": "msedge",
+      "playwright": "1.63.0"
+    }
+  },
+  {
     "id": "2026-09-29T04-42-47-461Z",
     "file": "reports/2026-09-29T04-42-47-461Z.html",
     "startedAt": "2026-09-29T04:42:47.461Z",

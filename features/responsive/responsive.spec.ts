@@ -9,15 +9,15 @@ import { test } from '../../src/fixtures';
 import { nodeCanvasRect } from '../../src/cocos';
 import { gamePlayUrl, waitForGame } from '../../src/game';
 import { pressCheckButton, waitUntilGameReady } from '../../src/game-check';
-import { check, note, skipNotApplicable } from '../../src/report';
+import { check, note, skipNotApplicable, type CheckStatus } from '../../src/report';
 import { GAMES } from '../../games';
 import { describeDevice, deviceOptions } from './devices';
 
 // Ảnh chụp là kết quả chính của feature này -> không cần video
 test.use({ video: 'off' });
 
-// Sai số cho phép khi so khung: layout desktop của Facebook trên tablet làm canvas cao hơn phần
-// màn hình còn lại ~2px (chỉ lẹm nền, không cắt UI). Vượt ngưỡng này mới coi là bị cắt.
+// Sai số cho phép khi so khung: tràn ≤ ngưỡng -> cảnh báo (⚠, test vẫn pass); vượt ngưỡng -> fail.
+// Vd layout desktop của Facebook trên tablet làm canvas cao hơn phần màn hình còn lại ~2px.
 const TOLERANCE_PX = 4;
 
 // Danh sách thiết bị lấy theo từng game; project nào chỉ chạy thiết bị của game đó
@@ -51,8 +51,13 @@ for (const deviceName of allDevices) {
         const scroll = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, inner: innerWidth }));
         check('Không có thanh cuộn ngang', scroll.width <= scroll.inner + 1, `trang rộng ${scroll.width}px / màn hình ${scroll.inner}px`);
 
-        check('Canvas game nằm trọn trong màn hình', within(canvas, { x: 0, y: 0, ...viewport }),
-          `${fmtBox(canvas)} / màn hình ${viewport.width}×${viewport.height}`);
+        const screen = { x: 0, y: 0, ...viewport };
+        const fit = checkFit(canvas, 'canvas game', screen, 'màn hình');
+        // Gợi ý nguyên nhân khi lệch nhỏ trên layout desktop (tablet): thanh trên của Facebook cao hơn phần Facebook trừ đi
+        const hint = fit.status === 'warn' && canvas.width < viewport.width * 0.95
+          ? ' Facebook đang hiển thị layout desktop (có sidebar), canvas được tính cao hơn phần màn hình còn lại dưới thanh trên của Facebook.'
+          : '';
+        check('Canvas game nằm trọn trong màn hình', fit.status, fit.detail + hint);
 
         const buttonName = game.cocos!.checkButton.split('/').pop()!;
         const { rect } = await nodeCanvasRect(frame, game.cocos!.checkButton);
@@ -63,7 +68,8 @@ for (const deviceName of allDevices) {
           width: Math.min(canvas.width, viewport.width - canvas.x),
           height: Math.min(canvas.height, viewport.height - canvas.y),
         };
-        check(`Nút ${buttonName} nằm trọn trong màn hình`, within(button, visibleCanvas), fmtBox(button));
+        const buttonFit = checkFit(button, `nút ${buttonName}`, visibleCanvas, 'phần canvas nhìn thấy được');
+        check(`Nút ${buttonName} nằm trọn trong màn hình`, buttonFit.status, buttonFit.detail);
       });
 
       await pressCheckButton(page, frame, game, { tap: device.touch });
@@ -74,12 +80,36 @@ for (const deviceName of allDevices) {
 
 type Box = { x: number; y: number; width: number; height: number };
 
-/** `inner` nằm trọn trong `outer` (cho phép lệch TOLERANCE_PX) */
-const within = (inner: Box, outer: Box) =>
-  inner.x >= outer.x - TOLERANCE_PX &&
-  inner.y >= outer.y - TOLERANCE_PX &&
-  inner.x + inner.width <= outer.x + outer.width + TOLERANCE_PX &&
-  inner.y + inner.height <= outer.y + outer.height + TOLERANCE_PX;
+const px = (n: number) => `${Math.round(n)}px`;
+
+/**
+ * So `inner` với `outer`, mô tả đầy đủ từng cạnh bị tràn:
+ *   pass — nằm trọn; warn — tràn ≤ TOLERANCE_PX; fail — tràn > TOLERANCE_PX
+ */
+function checkFit(inner: Box, innerName: string, outer: Box, outerName: string): { status: CheckStatus; detail: string } {
+  const edges = [
+    { edge: 'trên', over: outer.y - inner.y, at: `${innerName} bắt đầu ở y=${px(inner.y)}, ${outerName} bắt đầu ở y=${px(outer.y)}` },
+    { edge: 'dưới', over: inner.y + inner.height - (outer.y + outer.height),
+      at: `${innerName} kết thúc ở y=${px(inner.y + inner.height)}, ${outerName} kết thúc ở y=${px(outer.y + outer.height)}` },
+    { edge: 'trái', over: outer.x - inner.x, at: `${innerName} bắt đầu ở x=${px(inner.x)}, ${outerName} bắt đầu ở x=${px(outer.x)}` },
+    { edge: 'phải', over: inner.x + inner.width - (outer.x + outer.width),
+      at: `${innerName} kết thúc ở x=${px(inner.x + inner.width)}, ${outerName} kết thúc ở x=${px(outer.x + outer.width)}` },
+  ].filter((e) => e.over >= 0.5);
+
+  const sizes = `${cap(innerName)}: ${fmtBox(inner)}. ${cap(outerName)}: ${fmtBox(outer)}.`;
+  if (!edges.length) return { status: 'pass', detail: `Nằm trọn. ${sizes}` };
+
+  const worst = Math.max(...edges.map((e) => e.over));
+  const overflow = edges.map((e) => `tràn ${px(e.over)} ở cạnh ${e.edge} (${e.at})`).join('; ');
+  const status: CheckStatus = worst <= TOLERANCE_PX ? 'warn' : 'fail';
+  const verdict =
+    status === 'warn'
+      ? ` Trong ngưỡng cho phép ${TOLERANCE_PX}px nên không tính là lỗi, nhưng phần mép ${px(worst)} không hiển thị — xem ảnh để chắc không mất nội dung quan trọng.`
+      : ` Vượt ngưỡng cho phép ${TOLERANCE_PX}px — phần UI ở mép có thể bị cắt.`;
+  return { status, detail: `${cap(innerName)} ${overflow}. ${sizes}${verdict}` };
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 const fmtBox = (b: Box) =>
   `x=${Math.round(b.x)} y=${Math.round(b.y)} ${Math.round(b.width)}×${Math.round(b.height)}`;

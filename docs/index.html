@@ -8,26 +8,26 @@
   :root {
     --bg: #f6f7f9; --surface: #fff; --surface-2: #f0f2f5; --border: #e3e6ea;
     --text: #1c1e21; --muted: #65676b; --accent: #1877f2;
-    --pass: #1f9d55; --pass-bg: #e6f6ec; --fail: #d93025; --fail-bg: #fdecea; --skip: #8a8d91; --skip-bg: #eef0f2;
+    --pass: #1f9d55; --pass-bg: #e6f6ec; --warn: #a15c00; --warn-bg: #fff4d6; --fail: #d93025; --fail-bg: #fdecea; --skip: #8a8d91; --skip-bg: #eef0f2;
     --shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #111315; --surface: #1b1d20; --surface-2: #24272b; --border: #2e3237;
       --text: #e4e6eb; --muted: #a0a4ab; --accent: #4c9bff;
-      --pass: #4ccf7f; --pass-bg: #163524; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
+      --pass: #4ccf7f; --pass-bg: #163524; --warn: #f2b84b; --warn-bg: #3a2c10; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
       --shadow: none;
     }
   }
   :root[data-theme="dark"] {
     --bg: #111315; --surface: #1b1d20; --surface-2: #24272b; --border: #2e3237;
     --text: #e4e6eb; --muted: #a0a4ab; --accent: #4c9bff;
-    --pass: #4ccf7f; --pass-bg: #163524; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
+    --pass: #4ccf7f; --pass-bg: #163524; --warn: #f2b84b; --warn-bg: #3a2c10; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
     --shadow: none;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 24px 16px 48px; }
   header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
   h1 { font-size: 22px; margin: 0; }
   .sub { color: var(--muted); font-size: 13px; }
@@ -86,9 +86,23 @@
   .empty { padding: 40px; text-align: center; color: var(--muted); }
   @media (max-width: 720px) { .hide-sm { display: none; } .thumb { width: 64px; height: 40px; } }
   /* Report có nhiều cột: giữ độ rộng tối thiểu, màn hẹp thì cuộn ngang trong khung bảng */
-  .report table { min-width: 1080px; }
-  .report td .name { display: inline-block; min-width: 180px; }
-  .play-cell { font-size: 12px; white-space: nowrap; }
+  /* Bảng report: luôn vừa khung, không cuộn ngang — chữ dài tự xuống dòng */
+  .table-wrap.report { overflow: visible; }
+  .report td.mono, .report .play-cell .mono { overflow-wrap: break-word; }
+  .report td .name { font-weight: 500; }
+  .report th, .report td { padding: 10px; }
+  .play-cell { font-size: 12px; }
+  .report .proof { flex-wrap: wrap; }
+  /* Màn hẹp: mỗi dòng thành 1 thẻ xếp dọc, nhãn cột hiện bên trái */
+  @media (max-width: 900px) {
+    .report table, .report tbody, .report tr, .report td { display: block; width: 100%; }
+    .report thead { display: none; }
+    .report tr.main { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .report tr.main td { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: center; border: 0; padding: 4px 0; }
+    .report tr.main td::before { content: attr(data-label); color: var(--muted); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .report tr.detail td { padding: 10px 12px; }
+    .evidence figure, .thumb.big, .evidence video { width: 100%; }
+  }
   /* Report chia theo feature */
   .feature { margin-top: 28px; }
   .feature h2 { font-size: 18px; margin: 0 0 10px; }
@@ -116,6 +130,15 @@
   .device details { font-size: 12px; }
   .device details summary { cursor: pointer; color: var(--muted); }
   .ua .mono { word-break: break-all; margin-top: 4px; }
+  /* Cảnh báo: sai lệch trong ngưỡng cho phép */
+  .status.warned { color: var(--warn); background: var(--warn-bg); }
+  .tile.warn .value { color: var(--warn); }
+  .checks li.warn { color: var(--warn); }
+  .checks li.warn span { font-weight: 700; }
+  .checks .check-detail { color: var(--text); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+  .checks li.bad .check-detail { background: var(--fail-bg); }
+  .device.has-warn { border-color: var(--warn); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 </style>
 </head>
@@ -144,7 +167,7 @@
 
 <script>
 // Danh sách report được reporter nhúng vào lúc build, mới nhất trước
-const RUNS = [{"id":"2026-09-29T04-42-47-461Z","file":"reports/2026-09-29T04-42-47-461Z.html","startedAt":"2026-09-29T04:42:47.461Z","durationMs":335589.555,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-29-08-336Z","file":"reports/2026-09-29T04-29-08-336Z.html","startedAt":"2026-09-29T04:29:08.336Z","durationMs":335608.162,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-27-17-029Z","file":"reports/2026-09-29T04-27-17-029Z.html","startedAt":"2026-09-29T04:27:17.029Z","durationMs":102627.336,"status":"passed","counts":{"total":8,"passed":8,"failed":0,"skipped":0},"features":["responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T11-27-52-253Z","file":"reports/2026-09-28T11-27-52-253Z.html","startedAt":"2026-09-28T11:27:52.253Z","durationMs":186276.96,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T10-46-25-603Z","file":"reports/2026-09-28T10-46-25-603Z.html","startedAt":"2026-09-28T10:46:25.603Z","durationMs":204331.89800000002,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T09-03-54-323Z","file":"reports/2026-09-28T09-03-54-323Z.html","startedAt":"2026-09-28T09:03:54.323Z","durationMs":106362.816,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}}];
+const RUNS = [{"id":"2026-09-29T05-00-58-554Z","file":"reports/2026-09-29T05-00-58-554Z.html","startedAt":"2026-09-29T05:00:58.554Z","durationMs":352144.458,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0,"warned":3},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-42-47-461Z","file":"reports/2026-09-29T04-42-47-461Z.html","startedAt":"2026-09-29T04:42:47.461Z","durationMs":335589.555,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-29-08-336Z","file":"reports/2026-09-29T04-29-08-336Z.html","startedAt":"2026-09-29T04:29:08.336Z","durationMs":335608.162,"status":"passed","counts":{"total":25,"passed":25,"failed":0,"skipped":0},"features":["auth","entry-point","responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-29T04-27-17-029Z","file":"reports/2026-09-29T04-27-17-029Z.html","startedAt":"2026-09-29T04:27:17.029Z","durationMs":102627.336,"status":"passed","counts":{"total":8,"passed":8,"failed":0,"skipped":0},"features":["responsive"],"games":[{"slug":"snake-escape","id":"1329094249218455","name":"Snake Escape Puzzle","account":"mk***@tfbnw.net"}],"meta":{"browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T11-27-52-253Z","file":"reports/2026-09-28T11-27-52-253Z.html","startedAt":"2026-09-28T11:27:52.253Z","durationMs":186276.96,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T10-46-25-603Z","file":"reports/2026-09-28T10-46-25-603Z.html","startedAt":"2026-09-28T10:46:25.603Z","durationMs":204331.89800000002,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}},{"id":"2026-09-28T09-03-54-323Z","file":"reports/2026-09-28T09-03-54-323Z.html","startedAt":"2026-09-28T09:03:54.323Z","durationMs":106362.816,"status":"passed","counts":{"total":17,"passed":17,"failed":0,"skipped":0},"meta":{"gameId":"1329094249218455","gameName":"Snake Escape Puzzle","account":"mk***@tfbnw.net","browser":"msedge","playwright":"1.63.0"}}];
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -178,7 +201,8 @@ if (!RUNS.length) {
     const rate = rateOf(r.counts);
     return `<tr class="main">
       <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
-      <td><span class="status ${r.counts.failed ? 'failed' : 'passed'}">${r.counts.failed ? `✕ ${r.counts.failed} fail` : '✓ Pass'}</span></td>
+      <td><span class="status ${r.counts.failed ? 'failed' : r.counts.warned ? 'warned' : 'passed'}">${
+        r.counts.failed ? `✕ ${r.counts.failed} fail` : r.counts.warned ? `⚠ Pass · ${r.counts.warned} cảnh báo` : '✓ Pass'}</span></td>
       <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
       <td class="hide-sm">${esc(gamesOf(r).join(', '))}</td>
       <td class="hide-sm">${featuresOf(r).map((f) => `<span class="kind">${esc(f)}</span>`).join(' ')}</td>

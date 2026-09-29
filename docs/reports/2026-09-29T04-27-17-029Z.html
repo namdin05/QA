@@ -8,26 +8,26 @@
   :root {
     --bg: #f6f7f9; --surface: #fff; --surface-2: #f0f2f5; --border: #e3e6ea;
     --text: #1c1e21; --muted: #65676b; --accent: #1877f2;
-    --pass: #1f9d55; --pass-bg: #e6f6ec; --fail: #d93025; --fail-bg: #fdecea; --skip: #8a8d91; --skip-bg: #eef0f2;
+    --pass: #1f9d55; --pass-bg: #e6f6ec; --warn: #a15c00; --warn-bg: #fff4d6; --fail: #d93025; --fail-bg: #fdecea; --skip: #8a8d91; --skip-bg: #eef0f2;
     --shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #111315; --surface: #1b1d20; --surface-2: #24272b; --border: #2e3237;
       --text: #e4e6eb; --muted: #a0a4ab; --accent: #4c9bff;
-      --pass: #4ccf7f; --pass-bg: #163524; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
+      --pass: #4ccf7f; --pass-bg: #163524; --warn: #f2b84b; --warn-bg: #3a2c10; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
       --shadow: none;
     }
   }
   :root[data-theme="dark"] {
     --bg: #111315; --surface: #1b1d20; --surface-2: #24272b; --border: #2e3237;
     --text: #e4e6eb; --muted: #a0a4ab; --accent: #4c9bff;
-    --pass: #4ccf7f; --pass-bg: #163524; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
+    --pass: #4ccf7f; --pass-bg: #163524; --warn: #f2b84b; --warn-bg: #3a2c10; --fail: #ff6b5e; --fail-bg: #3d1a17; --skip: #9ba0a7; --skip-bg: #2a2d31;
     --shadow: none;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  .wrap { max-width: 1360px; margin: 0 auto; padding: 24px 16px 48px; }
   header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; margin-bottom: 20px; }
   h1 { font-size: 22px; margin: 0; }
   .sub { color: var(--muted); font-size: 13px; }
@@ -86,9 +86,23 @@
   .empty { padding: 40px; text-align: center; color: var(--muted); }
   @media (max-width: 720px) { .hide-sm { display: none; } .thumb { width: 64px; height: 40px; } }
   /* Report có nhiều cột: giữ độ rộng tối thiểu, màn hẹp thì cuộn ngang trong khung bảng */
-  .report table { min-width: 1080px; }
-  .report td .name { display: inline-block; min-width: 180px; }
-  .play-cell { font-size: 12px; white-space: nowrap; }
+  /* Bảng report: luôn vừa khung, không cuộn ngang — chữ dài tự xuống dòng */
+  .table-wrap.report { overflow: visible; }
+  .report td.mono, .report .play-cell .mono { overflow-wrap: break-word; }
+  .report td .name { font-weight: 500; }
+  .report th, .report td { padding: 10px; }
+  .play-cell { font-size: 12px; }
+  .report .proof { flex-wrap: wrap; }
+  /* Màn hẹp: mỗi dòng thành 1 thẻ xếp dọc, nhãn cột hiện bên trái */
+  @media (max-width: 900px) {
+    .report table, .report tbody, .report tr, .report td { display: block; width: 100%; }
+    .report thead { display: none; }
+    .report tr.main { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .report tr.main td { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; align-items: center; border: 0; padding: 4px 0; }
+    .report tr.main td::before { content: attr(data-label); color: var(--muted); font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .report tr.detail td { padding: 10px 12px; }
+    .evidence figure, .thumb.big, .evidence video { width: 100%; }
+  }
   /* Report chia theo feature */
   .feature { margin-top: 28px; }
   .feature h2 { font-size: 18px; margin: 0 0 10px; }
@@ -116,6 +130,15 @@
   .device details { font-size: 12px; }
   .device details summary { cursor: pointer; color: var(--muted); }
   .ua .mono { word-break: break-all; margin-top: 4px; }
+  /* Cảnh báo: sai lệch trong ngưỡng cho phép */
+  .status.warned { color: var(--warn); background: var(--warn-bg); }
+  .tile.warn .value { color: var(--warn); }
+  .checks li.warn { color: var(--warn); }
+  .checks li.warn span { font-weight: 700; }
+  .checks .check-detail { color: var(--text); background: var(--warn-bg); border-radius: 6px; padding: 6px 8px; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+  .checks li.bad .check-detail { background: var(--fail-bg); }
+  .device.has-warn { border-color: var(--warn); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 </style>
 </head>
@@ -150,6 +173,12 @@ const isFail = (s) => ['failed', 'timedOut', 'interrupted'].includes(s);
 const FEATURE_LABEL = { auth: 'Đăng nhập', 'entry-point': 'Entry point', responsive: 'Responsive' };
 const featureLabel = (f) => FEATURE_LABEL[f] ?? f;
 const statusBadge = (s) => `<span class="status ${s}">${STATUS_LABEL[s] ?? s}</span>`;
+// Report cũ chỉ có `ok`; report mới có thêm mức `warn` (sai lệch trong ngưỡng cho phép)
+const checkStatus = (c) => c.status ?? (c.ok ? 'pass' : 'fail');
+const warnCount = (t) => t.checks.filter((c) => checkStatus(c) === 'warn').length;
+/** Badge của test: pass nhưng có cảnh báo -> ⚠ */
+const testBadge = (t) => t.status === 'passed' && warnCount(t)
+  ? `<span class="status warned">⚠ Pass · ${warnCount(t)} cảnh báo</span>` : statusBadge(t.status);
 // Video của các lần chạy cũ bị dọn để repo không phình -> hiện thông báo thay vì khung đen
 const videoTag = (src, extra = '') =>
   `<video controls preload="metadata" ${extra} src="${esc(src)}" onerror="this.outerHTML='<div class=&quot;empty&quot;>Video không còn — chỉ giữ cho các lần chạy gần nhất</div>'"></video>`;
@@ -171,14 +200,17 @@ function renderHeader() {
   ].join(' · ');
   const c = RUN.counts;
   const rate = c.total - c.skipped ? Math.round((c.passed / (c.total - c.skipped)) * 100) : 0;
+  const warned = c.warned ?? tests.filter((t) => t.status === 'passed' && warnCount(t)).length;
   $('#tiles').innerHTML = [
     [c.failed ? 'fail' : 'pass', 'Tỉ lệ pass', `${rate}%`], ['pass', 'Pass', c.passed], [c.failed ? 'fail' : '', 'Fail', c.failed],
-    ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
+    [warned ? 'warn' : '', 'Cảnh báo', warned], ['', 'Bỏ qua', c.skipped], ['', 'Thời gian', fmtDur(RUN.durationMs)],
   ].map(([cls, l, v]) => `<div class="card tile ${cls}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join('');
   $('#featureNav').innerHTML = features.length > 1 ? features.map((f) => {
     const ts = tests.filter((t) => t.feature === f);
     const failed = ts.filter((t) => isFail(t.status)).length;
-    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} <span class="${failed ? 'mismatch' : 'muted'}">${failed ? `${failed} fail` : ts.length}</span></a>`;
+    const warns = ts.filter((t) => t.status === 'passed' && warnCount(t)).length;
+    const badge = failed ? `<span class="mismatch">${failed} fail</span>` : warns ? `<span class="status warned">⚠ ${warns}</span>` : `<span class="muted">${ts.length}</span>`;
+    return `<a class="chip" href="#f-${esc(f)}">${esc(featureLabel(f))} ${badge}</a>`;
   }).join('') : '';
 }
 
@@ -198,13 +230,18 @@ function tableSection(feature, list) {
     <section class="card table-wrap report"><table>
       <thead><tr>
         <th>Trạng thái</th><th>Test</th>
-        ${hasEpCols ? '<th class="hide-sm">Source</th><th>Expected</th><th>Actual</th>' : ''}
+        ${hasEpCols ? '<th>Source</th><th>Expected</th><th>Actual</th>' : ''}
         ${hasGameCol ? '<th>Vào game</th>' : ''}
-        <th class="hide-sm">Thời gian</th><th>Bằng chứng</th>
+        <th>Thời gian</th><th>Bằng chứng</th>
       </tr></thead>
       <tbody>${shown.length ? shown.map((t) => tableRow(t, hasEpCols, hasGameCol)).join('') : '<tr><td colspan="9" class="empty">Không có test nào.</td></tr>'}</tbody>
     </table></section>`;
 }
+
+/** Ô bảng: nhãn cột (hiện khi màn hẹp xếp dọc) + nội dung bọc trong .cell */
+const cell = (label, html, cls = '') => `<td data-label="${label}" class="${cls}"><div class="cell">${html}</div></td>`;
+/** Cho phép xuống dòng sau `_` / `~` thay vì cắt giữa chữ (vd web_games_hub) */
+const breakable = (s) => esc(s).replace(/([_~])/g, '$1<wbr>');
 
 function tableRow(t, hasEpCols, hasGameCol) {
   const i = rowSeq++;
@@ -213,20 +250,22 @@ function tableRow(t, hasEpCols, hasGameCol) {
   const playOk = t.play && !t.play.startsWith('skipped');
   const cols = 3 + (hasEpCols ? 3 : 0) + (hasGameCol ? 1 : 0);
   return `<tr class="main">
-    <td>${statusBadge(t.status)}</td>
-    <td><span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
-      ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}</td>
+    ${cell('Trạng thái', statusBadge(t.status))}
+    ${cell('Test', `<span class="kind">${esc(t.kind)}</span> <span class="name">${esc(t.name)}</span>
+      ${hasDetail ? `<br><button class="link" data-toggle="${i}">Chi tiết</button>` : ''}`)}
     ${hasEpCols ? `
-      <td class="hide-sm mono muted">${esc(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—'))}</td>
-      <td class="mono">${esc(t.expected ?? '—')}</td>
-      <td class="mono ${mismatch ? 'mismatch' : ''}">${esc(t.actual ?? '—')}</td>` : ''}
-    ${hasGameCol ? `<td class="play-cell">${playOk ? `<span class="mono">${esc(t.play)}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}` : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`}</td>` : ''}
-    <td class="hide-sm muted">${fmtDur(t.durationMs)}</td>
-    <td><div class="proof">
+      ${cell('Source', breakable(sourceOf(t) || (t.kind === 'URL' ? '∅' : '—')), 'mono muted')}
+      ${cell('Expected', breakable(t.expected ?? '—'), 'mono')}
+      ${cell('Actual', breakable(t.actual ?? '—'), `mono ${mismatch ? 'mismatch' : ''}`)}` : ''}
+    ${hasGameCol ? cell('Vào game', playOk
+      ? `<span class="mono">${esc(t.play).replace(' → ', ' →<wbr> ')}</span>${t.readyMs ? `<br><span class="muted">load ${fmtDur(t.readyMs)}</span>` : ''}`
+      : `<span class="muted">${esc(t.play ? 'chưa cấu hình' : '—')}</span>`, 'play-cell') : ''}
+    ${cell('Thời gian', fmtDur(t.durationMs), 'muted')}
+    ${cell('Bằng chứng', `<div class="proof">
       ${t.screenshot ? `<img class="thumb" loading="lazy" src="${t.screenshot}" alt="Ảnh chụp ${esc(t.name)}">` : ''}
       ${t.video ? `<button class="chip play" data-video="${esc(t.video)}">▶ Video</button>` : ''}
       ${!t.screenshot && !t.video ? '<span class="muted">—</span>' : ''}
-    </div></td>
+    </div>`)}
   </tr>
   ${hasDetail ? `<tr class="detail" id="d${i}" hidden><td colspan="${cols}">
     ${t.dashboardShot || t.video ? `<div class="evidence">
@@ -249,24 +288,29 @@ function deviceCard(t) {
   const [w, h] = String(d.viewport ?? '').split('×').map(Number);
   const ratio = w && h ? `${w} / ${h}` : '9 / 16';
   const spec = [
-    ['Loại', `${d.type ?? t.kind} · ${d.os ?? ''}`],
+    ['Loại', d.type ?? t.kind],
+    // OS lấy từ user agent của preset Playwright — là thông số giả lập, không phải máy thật
+    ['OS (theo UA)', d.os ?? '—'],
     ['Viewport', `${d.viewport ?? '—'} CSS px`],
     ['Màn hình', `${d.screen ?? '—'} px · DPR ${d.dpr ?? '—'}`],
     ['Cảm ứng', d.touch ? 'Có (dùng tap)' : 'Không'],
     ['Canvas game', t.canvas ? `${t.canvas} · ${t.layout ?? ''}` : '—'],
     ['Load xong', t.readyMs ? fmtDur(t.readyMs) : '—'],
   ];
-  return `<article class="card device">
-    <header class="device-head"><h3>${esc(t.name)}</h3>${statusBadge(t.status)}</header>
+  return `<article class="card device ${warnCount(t) && t.status === 'passed' ? 'has-warn' : ''}">
+    <header class="device-head"><h3>${esc(t.name)}</h3>${testBadge(t)}</header>
     <div class="shots">
       ${[['dashboardShot', 'Load xong'], ['screenshot', 'Sau khi chạm']].map(([k, cap]) => t[k] ? `
         <figure><div class="frame" style="aspect-ratio:${ratio}"><img class="thumb shot" loading="lazy" src="${t[k]}" alt="${esc(t.name)} — ${cap}"></div>
         <figcaption>${cap}</figcaption></figure>` : '').join('')}
     </div>
     <dl class="spec">${spec.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    ${t.checks.length ? `<ul class="checks">${t.checks.map((c) => `
-      <li class="${c.ok ? 'ok' : 'bad'}"><span aria-hidden="true">${c.ok ? '✓' : '✕'}</span> ${esc(c.name)}
-        ${c.detail && !c.ok ? `<div class="mono muted">${esc(c.detail)}</div>` : ''}</li>`).join('')}</ul>` : ''}
+    ${t.checks.length ? `<ul class="checks">${t.checks.map((c) => {
+      const s = checkStatus(c);
+      const [cls, icon, label] = { pass: ['ok', '✓', 'Đạt'], warn: ['warn', '⚠', 'Cảnh báo'], fail: ['bad', '✕', 'Không đạt'] }[s];
+      return `<li class="${cls}"><span aria-hidden="true">${icon}</span> ${esc(c.name)}<span class="sr-only"> — ${label}</span>
+        ${c.detail && s !== 'pass' ? `<div class="check-detail">${esc(c.detail)}</div>` : ''}</li>`;
+    }).join('')}</ul>` : ''}
     ${t.error ? `<details><summary>Lỗi</summary><pre class="err">${esc(t.error)}</pre></details>` : ''}
     <details class="ua"><summary>User agent</summary><div class="mono muted">${esc(d.userAgent ?? '')}</div></details>
   </article>`;
@@ -277,8 +321,10 @@ function renderSections() {
   $('#sections').innerHTML = features.map((f) => {
     const list = tests.filter((t) => t.feature === f);
     const failed = list.filter((t) => isFail(t.status)).length;
+    const warns = list.filter((t) => t.status === 'passed' && warnCount(t)).length;
     return `<section class="feature" id="f-${esc(f)}">
-      <h2>${esc(featureLabel(f))} <span class="muted">${list.length - failed}/${list.length} pass</span></h2>
+      <h2>${esc(featureLabel(f))} <span class="muted">${list.length - failed}/${list.length} pass</span>
+        ${warns ? `<span class="status warned">⚠ ${warns} có cảnh báo</span>` : ''}</h2>
       ${f === 'responsive' ? `<p class="sub">Giả lập thiết bị (viewport, DPR, user agent, cảm ứng) trên ${esc(RUN.meta.browser)} — giống DevTools › Device Toolbar, không phải máy thật.</p>` : ''}
       ${list.some((t) => t.device) ? deviceSection(list) : tableSection(f, list)}
     </section>`;

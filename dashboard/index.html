@@ -67,7 +67,8 @@ if (!RUNS.length) {
     const rate = rateOf(r.counts);
     return `<tr class="main">
       <td><a href="${esc(r.file)}">${fmtTime(r.startedAt)}</a></td>
-      <td><span class="status ${r.counts.failed ? 'failed' : 'passed'}">${r.counts.failed ? `✕ ${r.counts.failed} fail` : '✓ Pass'}</span></td>
+      <td><span class="status ${r.counts.failed ? 'failed' : r.counts.warned ? 'warned' : 'passed'}">${
+        r.counts.failed ? `✕ ${r.counts.failed} fail` : r.counts.warned ? `⚠ Pass · ${r.counts.warned} cảnh báo` : '✓ Pass'}</span></td>
       <td><span class="rate ${r.counts.failed ? 'bad' : 'ok'}">${rate}%</span> <span class="muted">(${r.counts.passed}/${r.counts.total})</span></td>
       <td class="hide-sm">${esc(gamesOf(r).join(', '))}</td>
       <td class="hide-sm">${featuresOf(r).map((f) => `<span class="kind">${esc(f)}</span>`).join(' ')}</td>

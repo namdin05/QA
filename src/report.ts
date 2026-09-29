@@ -21,8 +21,15 @@ export function skipNotApplicable(reason: string) {
   test.skip(true, reason);
 }
 
-/** Kiểm tra mềm: ghi kết quả lên report, fail test nhưng vẫn chạy tiếp các kiểm tra khác */
-export function check(name: string, ok: boolean, detail = '') {
-  note('check', JSON.stringify({ name, ok, detail }));
-  expect.soft(ok, detail ? `${name}: ${detail}` : name).toBe(true);
+/**
+ * pass = đạt; warn = có sai lệch nhưng trong ngưỡng cho phép (test vẫn pass, report hiện ⚠ kèm mô tả);
+ * fail = không đạt (test fail)
+ */
+export type CheckStatus = 'pass' | 'warn' | 'fail';
+
+/** Kiểm tra mềm: ghi kết quả lên report; `fail` làm test fail nhưng vẫn chạy tiếp các kiểm tra khác */
+export function check(name: string, result: boolean | CheckStatus, detail = '') {
+  const status: CheckStatus = typeof result === 'boolean' ? (result ? 'pass' : 'fail') : result;
+  note('check', JSON.stringify({ name, status, ok: status !== 'fail', detail }));
+  expect.soft(status, detail ? `${name}: ${detail}` : name).not.toBe('fail');
 }
